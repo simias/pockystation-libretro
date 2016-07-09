@@ -1,0 +1,15 @@
+[package]
+name = "pockystation-libretro"
+version = "0.1.0"
+authors = ["Lionel Flandrin <lionel.flandrin@gmail.com>"]
+
+[lib]
+name = "pockystation_retro"
+crate-type = ["dylib"]
+
+[dependencies]
+log = "0.3.6"
+libc = "0.2.13"
+
+[dependencies.pockystation]
+path = "pockystation"

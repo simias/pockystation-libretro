@@ -1,0 +1,3 @@
+[submodule "pockystation"]
+	path = pockystation
+	url = https://github.com/simias/pockystation
