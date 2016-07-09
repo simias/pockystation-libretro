@@ -269,6 +269,7 @@ impl libretro::Context for Context {
     }
 
     fn reset(&mut self) {
+        self.cpu.reset();
     }
 
     fn gl_context_reset(&mut self) {
