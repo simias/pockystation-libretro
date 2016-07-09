@@ -10,6 +10,7 @@ use std::io::Read;
 
 use pockystation::{MASTER_CLOCK_HZ, DAC_SAMPLE_RATE};
 use pockystation::cpu::Cpu;
+use pockystation::interrupt::Interrupt;
 use pockystation::memory::Interconnect;
 use pockystation::memory::bios::{Bios, BIOS_SIZE};
 use pockystation::memory::flash::{Flash, FLASH_SIZE};
@@ -219,11 +220,27 @@ impl Context {
             }
         }
     }
-}
+
+    fn poll_controllers(&mut self) {
+        let irq_controller = self.cpu.interconnect_mut().irq_controller_mut();
+
+        for &(retrobutton, irq) in &BUTTON_MAP {
+            let active =
+                if libretro::button_pressed(0, retrobutton) {
+                    true
+                } else {
+                    false
+                };
+
+            irq_controller.set_raw_interrupt(irq, active);
+        }
+    }}
 
 impl libretro::Context for Context {
 
     fn render_frame(&mut self) {
+        self.poll_controllers();
+
         // Step for 1/60th of a second
         self.cpu.run_ticks(MASTER_CLOCK_HZ / 60);
 
@@ -291,3 +308,10 @@ fn _parse_bool(opt: &str) -> Result<bool, ()> {
 fn init_variables() {
     CoreVariables::register();
 }
+
+const BUTTON_MAP: [(libretro::JoyPadButton, Interrupt); 5] =
+    [(libretro::JoyPadButton::A,     Interrupt::ActionButton),
+     (libretro::JoyPadButton::Up,    Interrupt::UpButton),
+     (libretro::JoyPadButton::Down,  Interrupt::DownButton),
+     (libretro::JoyPadButton::Left,  Interrupt::LeftButton),
+     (libretro::JoyPadButton::Right, Interrupt::RightButton)];
