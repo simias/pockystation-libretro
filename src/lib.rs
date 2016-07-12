@@ -8,9 +8,11 @@ use std::path::{Path, PathBuf};
 use std::fs::{File, metadata};
 use std::io::Read;
 
-use pockystation::{MASTER_CLOCK_HZ, DAC_SAMPLE_RATE};
+use pockystation::{MASTER_CLOCK_HZ};
 use pockystation::cpu::Cpu;
 use pockystation::interrupt::Interrupt;
+use pockystation::dac;
+use pockystation::dac::Dac;
 use pockystation::memory::Interconnect;
 use pockystation::memory::bios::{Bios, BIOS_SIZE};
 use pockystation::memory::flash::{Flash, FLASH_SIZE};
@@ -40,7 +42,7 @@ const SYSTEM_AV_INFO: libretro::SystemAvInfo = libretro::SystemAvInfo {
     },
     timing: libretro::SystemTiming {
         fps: 60.,
-        sample_rate: DAC_SAMPLE_RATE as f64,
+        sample_rate: dac::SAMPLE_RATE_HZ as f64,
     }
 };
 
@@ -85,8 +87,9 @@ impl Context {
                 }
             };
 
-        let inter = Interconnect::new(bios, flash);
+        let dac = Dac::new(Box::new(AudioBackend::new()));
 
+        let inter = Interconnect::new(bios, flash, dac);
 
         Ok(Cpu::new(inter))
     }
@@ -234,7 +237,8 @@ impl Context {
 
             irq_controller.set_raw_interrupt(irq, active);
         }
-    }}
+    }
+}
 
 impl libretro::Context for Context {
 
@@ -308,6 +312,40 @@ fn _parse_bool(opt: &str) -> Result<bool, ()> {
 
 fn init_variables() {
     CoreVariables::register();
+}
+
+struct AudioBackend {
+    /// Audio buffer. Libretro always assumes stereo so we'll have to
+    /// duplicate each sample.
+    buffer: [i16; 2048],
+    /// Current position of the write pointer in the buffer
+    pos: u16,
+}
+
+impl AudioBackend {
+    fn new() -> AudioBackend {
+        AudioBackend {
+            buffer: [0; 2048],
+            pos: 0,
+        }
+    }
+}
+
+impl dac::Backend for AudioBackend {
+    fn push_sample(&mut self, sample: i16) {
+        let pos = self.pos as usize;
+
+        // Duplicate the sample for "stereo" output
+        self.buffer[pos] = sample;
+        self.buffer[pos + 1] = sample;
+
+        self.pos += 2;
+
+        if self.pos == self.buffer.len() as u16 {
+            libretro::send_audio_samples(&self.buffer);
+            self.pos = 0;
+        }
+    }
 }
 
 const BUTTON_MAP: [(libretro::JoyPadButton, Interrupt); 5] =
