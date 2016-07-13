@@ -13,7 +13,8 @@ use pockystation::cpu::Cpu;
 use pockystation::interrupt::Interrupt;
 use pockystation::dac;
 use pockystation::dac::Dac;
-use pockystation::memory::Interconnect;
+use pockystation::rtc::Bcd;
+use pockystation::memory::{Interconnect, Byte};
 use pockystation::memory::bios::{Bios, BIOS_SIZE};
 use pockystation::memory::flash::{Flash, FLASH_SIZE};
 
@@ -22,6 +23,7 @@ extern crate log;
 extern crate libc;
 #[macro_use]
 extern crate pockystation;
+extern crate time;
 
 /// Static system information sent to the frontend on request
 const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -49,7 +51,15 @@ const SYSTEM_AV_INFO: libretro::SystemAvInfo = libretro::SystemAvInfo {
 pub const VERSION_CSTR: &'static str = concat!(env!("CARGO_PKG_VERSION"), '\0');
 
 struct Context {
+    /// Pockystation CPU instance holding all the emulated state
     cpu: Cpu,
+    /// If true the emulated RTC is periodically synchronized with the
+    /// host clock.
+    rtc_host_sync: bool,
+    /// Countdown for RTC synchronization with host if
+    /// `rtc_host_sync` is true. Decreases by one every frame,
+    /// synchronizes when it reaches 0.
+    rtc_sync_counter: u32,
 }
 
 impl Context {
@@ -62,9 +72,15 @@ impl Context {
 
         let cpu = try!(Context::load(flash));
 
-        Ok(Context {
+        let mut context = Context {
             cpu: cpu,
-        })
+            rtc_host_sync: false,
+            rtc_sync_counter: 0,
+        };
+
+        libretro::Context::refresh_variables(&mut context);
+
+        Ok(context)
     }
 
     fn load(memory_card: &Path) -> Result<Cpu, ()> {
@@ -238,12 +254,63 @@ impl Context {
             irq_controller.set_raw_interrupt(irq, active);
         }
     }
+
+    /// Synchronize emulated RTC with the host
+    fn sync_host_rtc(&mut self) {
+        let now = time::now();
+
+        let inter = self.cpu.interconnect_mut();
+
+        let year = now.tm_year + 1900;
+        let century = (year / 100) as u8;
+        let century = Bcd::from_binary(century).unwrap();
+        let year = (year % 100) as u8;
+
+        // The century is not stored in the RTC, it's stored in RAM at
+        // address 0xcf. Hopefully this address is always correct...
+        inter.store::<Byte>(0xcf, century.bcd() as u32);
+
+        {
+            let rtc = inter.rtc_mut();
+
+            // Handle leap seconds, just in case...
+            let secs =
+                match now.tm_sec {
+                    s @ 0...59 => s as u8,
+                    _ => 59,
+                };
+
+            rtc.set_seconds(Bcd::from_binary(secs).unwrap());
+            rtc.set_minutes(Bcd::from_binary(now.tm_min as u8).unwrap());
+            rtc.set_hours(Bcd::from_binary(now.tm_hour as u8).unwrap());
+
+            let week_day = now.tm_wday as u8 + 1;
+            rtc.set_week_day(Bcd::from_binary(week_day).unwrap());
+
+            let day = now.tm_mday as u8 + 1;
+            rtc.set_day(Bcd::from_binary(day).unwrap());
+
+            let month = now.tm_mon as u8 + 1;
+            rtc.set_month(Bcd::from_binary(month).unwrap());
+
+            rtc.set_year(Bcd::from_binary(year).unwrap());
+        }
+    }
 }
 
 impl libretro::Context for Context {
 
     fn render_frame(&mut self) {
         self.poll_controllers();
+
+        if self.rtc_host_sync {
+            if self.rtc_sync_counter == 0 {
+                self.sync_host_rtc();
+                self.rtc_sync_counter = RTC_SYNC_DELAY_FRAMES;
+            }
+
+            self.rtc_sync_counter -= 1;
+        }
 
         // Step for 1/60th of a second
         self.cpu.run_ticks(MASTER_CLOCK_HZ / 60);
@@ -270,6 +337,7 @@ impl libretro::Context for Context {
     }
 
     fn refresh_variables(&mut self) {
+        self.rtc_host_sync = CoreVariables::rtc_host_sync();
     }
 
     fn reset(&mut self) {
@@ -298,11 +366,11 @@ fn load_game(memory: PathBuf) -> Option<Box<libretro::Context>> {
 
 libretro_variables!(
     struct CoreVariables (prefix = "pockystation") {
-        _dummy: bool, _parse_bool
-            => "Dummy option; disabled|enabled",
+        rtc_host_sync: bool, parse_bool
+            => "Synchronize real-time clock with host; disabled|enabled",
     });
 
-fn _parse_bool(opt: &str) -> Result<bool, ()> {
+fn parse_bool(opt: &str) -> Result<bool, ()> {
     match opt {
         "true" | "enabled" | "on" => Ok(true),
         "false" | "disabled" | "off" => Ok(false),
@@ -354,3 +422,7 @@ const BUTTON_MAP: [(libretro::JoyPadButton, Interrupt); 5] =
      (libretro::JoyPadButton::Down,  Interrupt::DownButton),
      (libretro::JoyPadButton::Left,  Interrupt::LeftButton),
      (libretro::JoyPadButton::Right, Interrupt::RightButton)];
+
+/// Number of frame elapsing between RTC synchronization (if the
+/// option is enabled).
+const RTC_SYNC_DELAY_FRAMES: u32 = 60;

@@ -10,6 +10,7 @@ crate-type = ["dylib"]
 [dependencies]
 log = "0.3.6"
 libc = "0.2.13"
+time = "0.1.35"
 
 [dependencies.pockystation]
 path = "pockystation"
