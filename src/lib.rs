@@ -406,7 +406,7 @@ impl Context {
             let week_day = now.tm_wday as u8 + 1;
             rtc.set_week_day(Bcd::from_binary(week_day).unwrap());
 
-            let day = now.tm_mday as u8 + 1;
+            let day = now.tm_mday as u8;
             rtc.set_day(Bcd::from_binary(day).unwrap());
 
             let month = now.tm_mon as u8 + 1;
