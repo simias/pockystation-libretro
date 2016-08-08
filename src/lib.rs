@@ -60,6 +60,9 @@ struct Context {
     /// If true the emulated RTC is periodically synchronized with the
     /// host clock.
     rtc_host_sync: bool,
+    /// If true the emulator will rotate the display when the software
+    /// requests it
+    lcd_rotation_en: bool,
     /// Countdown for RTC synchronization with host if
     /// `rtc_host_sync` is true. Decreases by one every frame,
     /// synchronizes when it reaches 0.
@@ -80,6 +83,7 @@ impl Context {
 
         let mut context = Context {
             cpu: cpu,
+            lcd_rotation_en: true,
             rtc_host_sync: false,
             rtc_sync_counter: 0,
             savestate_max_len: 0,
@@ -417,16 +421,26 @@ impl libretro::Context for Context {
         // Step for 1/60th of a second
         self.cpu.run_ticks(MASTER_CLOCK_HZ / 60);
 
-        let fb = self.cpu.interconnect().lcd().framebuffer();
+        let lcd = self.cpu.interconnect().lcd();
+
+        let fb = lcd.framebuffer();
 
         let mut fb_out = [0u32; 32 * 32];
+
+        let rotate = self.lcd_rotation_en && lcd.rotated();
 
         for y in 0..32 {
             let row = fb[y];
 
             for x in 0..32 {
                 if ((row >> x) & 1) == 0 {
-                    fb_out[y * 32 + x] = 0xffffff;
+                    let mut off = y * 32 + x;
+
+                    if rotate {
+                        off = 32 * 32 - off - 1;
+                    }
+
+                    fb_out[off] = 0xffffff;
                 }
             }
         }
@@ -440,6 +454,7 @@ impl libretro::Context for Context {
 
     fn refresh_variables(&mut self) {
         self.rtc_host_sync = CoreVariables::rtc_host_sync();
+        self.lcd_rotation_en = CoreVariables::lcd_rotation_en();
     }
 
     fn reset(&mut self) {
@@ -482,6 +497,8 @@ libretro_variables!(
     struct CoreVariables (prefix = "pockystation") {
         rtc_host_sync: bool, parse_bool
             => "Synchronize real-time clock with host; disabled|enabled",
+        lcd_rotation_en: bool, parse_bool
+            => "Enable display rotation; enabled|disabled",
     });
 
 fn parse_bool(opt: &str) -> Result<bool, ()> {
