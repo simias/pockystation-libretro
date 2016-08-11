@@ -1,14 +1,14 @@
-/// This file contains the libretro definitions ported from `libretro.h`
-///
-/// For more details see the original well-commented C header file:
-/// https://github.com/libretro/RetroArch/blob/master/libretro.h
-///
-/// I took the liberty to "rustify" the calling convention: I dropped
-/// the `retro_` prefix (useless when you have namespaces) and
-/// CamelCased the struct names.
-///
-/// Callback typedefs are altered in the same way and suffixed with
-/// `Fn` for clarity.
+//! This file contains the libretro definitions ported from `libretro.h`
+//!
+//! For more details see the original well-commented C header file:
+//! https://github.com/libretro/RetroArch/blob/master/libretro.h
+//!
+//! I took the liberty to "rustify" the calling convention: I dropped
+//! the `retro_` prefix (useless when you have namespaces) and
+//! CamelCased the struct names.
+//!
+//! Callback typedefs are altered in the same way and suffixed with
+//! `Fn` for clarity.
 
 use std::ptr;
 use std::ffi::{CStr, CString};
@@ -41,7 +41,7 @@ pub trait Context {
 
 /// Global context instance holding our emulator state. Libretro 1
 /// doesn't support multi-instancing
-static mut static_context: *mut Context = &mut dummy::Context;
+static mut static_context: *mut Context = 1 as *mut dummy::Context;
 
 unsafe fn set_context(context: Box<Context>) {
     static_context = Box::into_raw(context);
