@@ -1,7 +1,3 @@
-// XXX temporarily necessary to remove bogus warnings in rustc
-// 1.10.0. Will be removed later.
-#![allow(const_err)]
-
 #[macro_use]
 pub mod libretro;
 mod retrolog;
