@@ -2,6 +2,7 @@
 pub mod libretro;
 mod retrolog;
 mod savestate;
+mod debugger;
 
 use std::path::{Path, PathBuf};
 use std::fs::{File, metadata};
@@ -20,6 +21,8 @@ use pockystation::rtc::Bcd;
 use pockystation::memory::{Interconnect, Byte};
 use pockystation::memory::bios::{Bios, BIOS_SIZE};
 use pockystation::memory::flash::{Flash, FLASH_SIZE};
+
+use debugger::Debugger;
 
 #[macro_use]
 extern crate log;
@@ -57,6 +60,8 @@ pub const VERSION_CSTR: &'static str = concat!(env!("CARGO_PKG_VERSION"), '\0');
 struct Context {
     /// Pockystation CPU instance holding all the emulated state
     cpu: Cpu,
+    /// Debugger instance
+    debugger: Debugger,
     /// If true the emulated RTC is periodically synchronized with the
     /// host clock.
     rtc_host_sync: bool,
@@ -69,6 +74,8 @@ struct Context {
     rtc_sync_counter: u32,
     /// Cached value for the maximum savestate size in bytes
     savestate_max_len: usize,
+    /// If true we trigger the debugger when Pause/Break is pressed
+    debug_on_key: bool,
 }
 
 impl Context {
@@ -83,10 +90,12 @@ impl Context {
 
         let mut context = Context {
             cpu: cpu,
+            debugger: Debugger::new(),
             lcd_rotation_en: true,
             rtc_host_sync: false,
             rtc_sync_counter: 0,
             savestate_max_len: 0,
+            debug_on_key: false,
         };
 
         libretro::Context::refresh_variables(&mut context);
@@ -94,6 +103,10 @@ impl Context {
         let max_len = try!(context.compute_savestate_max_length());
 
         context.savestate_max_len = max_len;
+
+        if CoreVariables::debug_on_reset() {
+            context.trigger_break();
+        }
 
         Ok(context)
     }
@@ -402,12 +415,25 @@ impl Context {
             rtc.set_year(Bcd::from_binary(year).unwrap());
         }
     }
+
+    /// Trigger a breakpoint in the debugger
+    fn trigger_break(&mut self) {
+        pockystation::debugger::Debugger::trigger_break(&mut self.debugger);
+    }
 }
 
 impl libretro::Context for Context {
 
     fn render_frame(&mut self) {
         self.poll_controllers();
+
+        let debug_request =
+            self.debug_on_key &&
+            libretro::key_pressed(0, libretro::Key::Pause);
+
+        if debug_request {
+            self.trigger_break();
+        }
 
         if self.rtc_host_sync {
             if self.rtc_sync_counter == 0 {
@@ -419,7 +445,7 @@ impl libretro::Context for Context {
         }
 
         // Step for 1/60th of a second
-        self.cpu.run_ticks(MASTER_CLOCK_HZ / 60);
+        self.cpu.run_ticks(&mut self.debugger, MASTER_CLOCK_HZ / 60);
 
         let lcd = self.cpu.interconnect().lcd();
 
@@ -455,10 +481,17 @@ impl libretro::Context for Context {
     fn refresh_variables(&mut self) {
         self.rtc_host_sync = CoreVariables::rtc_host_sync();
         self.lcd_rotation_en = CoreVariables::lcd_rotation_en();
+        self.debug_on_key = CoreVariables::debug_on_key();
+
+        self.cpu.set_debug_on_bkpt(CoreVariables::debug_on_bkpt());
     }
 
     fn reset(&mut self) {
         self.cpu.reset();
+
+        if CoreVariables::debug_on_reset() {
+            self.trigger_break();
+        }
     }
 
     fn gl_context_reset(&mut self) {
@@ -498,7 +531,13 @@ libretro_variables!(
         rtc_host_sync: bool, parse_bool
             => "Synchronize real-time clock with host; disabled|enabled",
         lcd_rotation_en: bool, parse_bool
-            => "Enable display rotation; enabled|disabled",
+            => "Display rotation; enabled|disabled",
+        debug_on_bkpt: bool, parse_bool
+            => "Trigger debugger on BKPT instructions; disabled|enabled",
+        debug_on_key: bool, parse_bool
+            => "Trigger debugger when Pause/Break is pressed; disabled|enabled",
+        debug_on_reset: bool, parse_bool
+            => "Trigger debugger on start or reset; disabled|enabled",
     });
 
 fn parse_bool(opt: &str) -> Result<bool, ()> {
