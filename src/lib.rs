@@ -484,6 +484,14 @@ impl libretro::Context for Context {
         self.debug_on_key = CoreVariables::debug_on_key();
 
         self.cpu.set_debug_on_bkpt(CoreVariables::debug_on_bkpt());
+
+        let irq_controller = self.cpu.interconnect_mut().irq_controller_mut();
+
+        irq_controller.set_raw_interrupt(Interrupt::Docked,
+                                         CoreVariables::docked_irq());
+
+        irq_controller.set_raw_interrupt(Interrupt::Com,
+                                         CoreVariables::com_irq());
     }
 
     fn reset(&mut self) {
@@ -538,6 +546,10 @@ libretro_variables!(
             => "Trigger debugger when Pause/Break is pressed; disabled|enabled",
         debug_on_reset: bool, parse_bool
             => "Trigger debugger on start or reset; disabled|enabled",
+        docked_irq: bool, parse_bool
+            => "Docked IRQ level; off|on",
+        com_irq: bool, parse_bool
+            => "COM IRQ level; off|on",
     });
 
 fn parse_bool(opt: &str) -> Result<bool, ()> {
