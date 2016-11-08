@@ -35,7 +35,7 @@ extern crate rustc_serialize;
 /// Static system information sent to the frontend on request
 const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     library_name: cstring!("Pockystation"),
-    library_version: VERSION_CSTR as *const _ as *const c_char,
+    library_version: pockystation::VERSION_CSTR as *const _ as *const c_char,
     valid_extensions: cstring!("mcr"),
     need_fullpath: false,
     block_extract: false,
@@ -54,8 +54,6 @@ const SYSTEM_AV_INFO: libretro::SystemAvInfo = libretro::SystemAvInfo {
         sample_rate: dac::SAMPLE_RATE_HZ as f64,
     }
 };
-
-pub const VERSION_CSTR: &'static str = concat!(env!("CARGO_PKG_VERSION"), '\0');
 
 struct Context {
     /// Pockystation CPU instance holding all the emulated state
@@ -80,6 +78,7 @@ struct Context {
 
 impl Context {
     fn new(flash: &Path) -> Result<Context, ()> {
+        info!("Using PockyStation {}", pockystation::VERSION);
 
         if !libretro::set_pixel_format(libretro::PixelFormat::Xrgb8888) {
             error!("Can't set pixel format to XRGB 8888");
