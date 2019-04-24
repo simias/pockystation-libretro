@@ -1,6 +1,7 @@
 //! Logger implementation using libretro as a backend
 
 use log;
+use log::set_boxed_logger;
 use libretro;
 
 use std::io::{Write, stderr};
@@ -8,37 +9,40 @@ use std::io::{Write, stderr};
 struct RetroLogger;
 
 impl log::Log for RetroLogger {
-    fn enabled(&self, _: &log::LogMetadata) -> bool {
+    fn enabled(&self, _: &log::Metadata) -> bool {
         true
     }
 
-    fn log(&self, record: &log::LogRecord) {
+    fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             let s = ::std::fmt::format(*record.args());
 
             let lvl =
                 match record.level() {
-                    log::LogLevel::Error => libretro::log::Level::Error,
-                    log::LogLevel::Warn => libretro::log::Level::Warn,
-                    log::LogLevel::Info => libretro::log::Level::Info,
-                    log::LogLevel::Debug => libretro::log::Level::Debug,
+                    log::Level::Error => libretro::log::Level::Error,
+                    log::Level::Warn => libretro::log::Level::Warn,
+                    log::Level::Info => libretro::log::Level::Info,
+                    log::Level::Debug => libretro::log::Level::Debug,
                     // Nothing below Debug in libretro
-                    log::LogLevel::Trace => libretro::log::Level::Debug,
+                    log::Level::Trace => libretro::log::Level::Debug,
                 };
 
             libretro::log::log(lvl, &s);
         }
+    }
+
+    fn flush(&self) {
     }
 }
 
 struct StdErrLogger;
 
 impl log::Log for StdErrLogger {
-    fn enabled(&self, _: &log::LogMetadata) -> bool {
+    fn enabled(&self, _: &log::Metadata) -> bool {
         true
     }
 
-    fn log(&self, record: &log::LogRecord) {
+    fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             let _ =
                 writeln!(&mut stderr(),
@@ -47,21 +51,23 @@ impl log::Log for StdErrLogger {
                          record.args());
         }
     }
+
+    fn flush(&self) {
+        let _ = stderr().flush();
+    }
 }
 
 pub fn init() {
     let retrolog_ok = libretro::log::init();
 
-    log::set_logger(|max_log_level| {
-        // XXX Should we make this configurable?
-        max_log_level.set(log::LogLevelFilter::max());
-
+    let logger: Box<log::Log> =
         if retrolog_ok {
             Box::new(RetroLogger)
         } else {
             Box::new(StdErrLogger)
-        }
-    }).unwrap();
+        };
+
+    set_boxed_logger(logger).unwrap();
 
     if retrolog_ok {
         info!("Logging initialized");

@@ -8,10 +8,13 @@ name = "pockystation_retro"
 crate-type = ["dylib"]
 
 [dependencies]
-log = "0.3.6"
-libc = "0.2.13"
-time = "0.1.35"
-rustc-serialize = "0.3.19"
+libc = "0.2"
+time = "0.1"
+rustc-serialize = "0.3"
+
+[dependencies.log]
+version = "0.4.6"
+features = ["std"]
 
 [dependencies.pockystation]
 path = "pockystation"

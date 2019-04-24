@@ -27,7 +27,6 @@ use debugger::Debugger;
 #[macro_use]
 extern crate log;
 extern crate libc;
-#[macro_use]
 extern crate pockystation;
 extern crate time;
 extern crate rustc_serialize;
