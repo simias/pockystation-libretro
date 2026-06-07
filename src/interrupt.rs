@@ -1,6 +1,6 @@
 use memory::Addressable;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct IrqController {
     /// Raw interrupt signal levels
     raw: u16,
@@ -103,7 +103,7 @@ impl IrqController {
     }
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Interrupt {
     /// [IRQ] "action" button (the big one on the right)

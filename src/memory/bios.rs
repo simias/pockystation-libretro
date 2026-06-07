@@ -1,4 +1,6 @@
-use rustc_serialize::{Decodable, Encodable, Decoder, Encoder};
+use crate::box_array::BoxArray;
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 
 use shaman::digest::Digest;
 use shaman::sha2::Sha256;
@@ -6,7 +8,7 @@ use shaman::sha2::Sha256;
 use super::Addressable;
 
 pub struct Bios {
-    data: Box<[u8; BIOS_SIZE]>,
+    data: BoxArray<u8, BIOS_SIZE>,
 }
 
 impl Bios {
@@ -30,13 +32,10 @@ impl Bios {
         }
 
         // BIOS is valid, we can go on
-        let mut data = box_array![0; BIOS_SIZE];
 
-        for (d, &v) in data.iter_mut().zip(bios) {
-            *d = v;
-        }
-
-        Some(Bios { data: data })
+        Some(Bios { 
+            data: BoxArray::from_vec(bios.to_vec()),
+        })
     }
 
     pub fn load<A: Addressable>(&self, offset: u32) -> u32 {
@@ -57,27 +56,24 @@ impl Bios {
     }
 }
 
-impl Encodable for Bios {
-    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        // We don't store the full BIOS image in the savestate, mainly
-        // because I want to be able to share and distribute
-        // savestates without having to worry about legal
-        // implications. If we ever support multiple kernels we should
-        // probably serialize the SHA256 to make sure we're loading
-        // the correct one.
-
-        s.emit_nil()
+impl Serialize for Bios {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        ().serialize(serializer)
     }
 }
 
-impl Decodable for Bios {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Bios, D::Error> {
-        try!(d.read_nil());
+impl<'de> Deserialize<'de> for Bios {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let _ = <()>::deserialize(deserializer)?;
 
-        // Create a dummy BIOS with garbage contents, the frontend
-        // will have to reload it with the real kernel.
         Ok(Bios {
-            data: Box::new([0xba; BIOS_SIZE]),
+            data: BoxArray::from_vec(vec![0xba; BIOS_SIZE]),
         })
     }
 }

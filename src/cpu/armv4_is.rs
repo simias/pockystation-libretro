@@ -270,7 +270,7 @@ impl Mode1Addressing for Mode1LslReg {
         let shift = cpu.reg(rs) & 0xff;
 
         match shift {
-            0...31 => val << shift,
+            0..=31 => val << shift,
             _ => 0,
         }
     }
@@ -299,7 +299,7 @@ impl Mode1Addressing for Mode1LsrReg {
         let shift = cpu.reg(rs) & 0xff;
 
         match shift {
-            0...31 => val >> shift,
+            0..=31 => val >> shift,
             _ => 0,
         }
     }
@@ -376,7 +376,7 @@ impl Mode1Addressing for Mode1AsrReg {
 
         let r =
             match shift {
-                0...31 => val >> shift,
+                0..=31 => val >> shift,
                 // Shift by more than 31 is like shifting by 31 when
                 // using a signed value (i.e. the sign bit is
                 // replicated all over the 32bits)
@@ -991,9 +991,7 @@ fn mla<S>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
 /// Since we can't use boolean varibales as a generic parameter I use
 /// this trait to create a boolean "metatype"
 trait ModeFlag {
-    #[inline(always)]
     fn is_set() -> bool;
-    #[inline(always)]
     fn is_clear() -> bool {
         !Self::is_set()
     }

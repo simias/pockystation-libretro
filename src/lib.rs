@@ -15,6 +15,8 @@ mod timer;
 extern crate log;
 extern crate shaman;
 extern crate rustc_serialize;
+extern crate serde;
+extern crate serde_big_array;
 
 /// Maximal frequency of the CPU, this clock can be shifted left by a
 /// factor 0...7 to give the effective CPU frequency.

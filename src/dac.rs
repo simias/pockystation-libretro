@@ -1,6 +1,7 @@
 //! PocketStation Audio DAC emulation
 
-use rustc_serialize::{Decodable, Encodable, Decoder, Encoder};
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 
 use memory::Addressable;
 use MASTER_CLOCK_HZ;
@@ -84,44 +85,42 @@ impl Dac {
     }
 }
 
-impl Encodable for Dac {
-    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        // We don't serialize the backend, it'll be up to the frontend
-        // to reset it.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializedDac {
+    sample: i16,
+    enabled: bool,
+    divider: u32,
+}
 
-        s.emit_struct("Dac", 3, |s| {
-            try!(s.emit_struct_field("sample", 0,
-                                     |s| self.sample.encode(s)));
-            try!(s.emit_struct_field("enabled", 1,
-                                     |s| self.enabled.encode(s)));
-            try!(s.emit_struct_field("divider", 2,
-                                     |s| self.divider.encode(s)));
+impl Serialize for Dac {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = SerializedDac {
+            sample: self.sample,
+            enabled: self.enabled,
+            divider: self.divider,
+        };
 
-            Ok(())
-        })
+        s.serialize(serializer)
     }
 }
 
-impl Decodable for Dac {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Dac, D::Error> {
-        d.read_struct("Dac", 3, |d| {
-            let mut dac = Dac::new(Box::new(DummyBackend));
+impl<'de> Deserialize<'de> for Dac {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = SerializedDac::deserialize(deserializer)?;
 
-            dac.sample =
-                try!(d.read_struct_field("sample",
-                                         0,
-                                         Decodable::decode));
-            dac.enabled =
-                try!(d.read_struct_field("enabled",
-                                         1,
-                                         Decodable::decode));
-            dac.divider =
-                try!(d.read_struct_field("divider",
-                                         2,
-                                         Decodable::decode));
 
-            Ok(dac)
-        })
+        let mut dac = Dac::new(Box::new(DummyBackend));
+        dac.sample = s.sample;
+        dac.enabled = s.enabled;
+        dac.divider = s.divider;
+
+        Ok(dac)
     }
 }
 

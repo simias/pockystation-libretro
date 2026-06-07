@@ -8,7 +8,7 @@ use debugger::Debugger;
 mod armv4_is;
 mod thumbv1_is;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Cpu {
     /// Negative condition flag
     n: bool,
@@ -633,7 +633,7 @@ impl fmt::Display for RegisterIndex {
 }
 
 /// CPU modes
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Mode {
     User       = 0b10000,

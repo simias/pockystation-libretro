@@ -4,6 +4,8 @@ use dac::Dac;
 use irda::Irda;
 use rtc::Rtc;
 use timer::Timer;
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 
 use self::ram::Ram;
 use self::bios::Bios;
@@ -13,7 +15,7 @@ pub mod ram;
 pub mod bios;
 pub mod flash;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Interconnect {
     bios: Bios,
     flash: Flash,

@@ -2,7 +2,7 @@
 
 use memory::Addressable;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Lcd {
     mode: u8,
     calibration: u8,

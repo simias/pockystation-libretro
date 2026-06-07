@@ -375,7 +375,7 @@ fn op102_lsl_r(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     let val =
         match shift {
             0 => val,
-            1...31 => {
+            1..=31 => {
                 let shifted = (val as u64) << shift;
 
                 let carry = (shifted & (1 << 32)) != 0;
@@ -411,7 +411,7 @@ fn op103_lsr_r(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     let val =
         match shift {
             0 => val,
-            1...31 => {
+            1..=31 => {
                 let carry = (val & (1 << (shift - 1))) != 0;
 
                 cpu.set_c(carry);

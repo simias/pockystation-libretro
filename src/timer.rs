@@ -1,7 +1,7 @@
 use interrupt::{Interrupt, IrqController};
 use memory::Addressable;
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Timer {
     enabled: bool,
     /// In order to save a few cycles I merge the pre-divider and
