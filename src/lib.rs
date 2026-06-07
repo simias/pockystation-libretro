@@ -1,7 +1,6 @@
 #[macro_use]
 pub mod libretro;
 mod retrolog;
-mod savestate;
 mod debugger;
 
 use std::path::{Path, PathBuf};
@@ -9,8 +8,6 @@ use std::fs::{File, metadata};
 use std::io::Read;
 
 use libc::c_char;
-
-use rustc_serialize::{Encodable, Decodable};
 
 use pockystation::{MASTER_CLOCK_HZ};
 use pockystation::cpu::Cpu;
@@ -24,12 +21,13 @@ use pockystation::memory::flash::{Flash, FLASH_SIZE};
 
 use debugger::Debugger;
 
+extern crate flexbuffers;
 #[macro_use]
 extern crate log;
 extern crate libc;
 extern crate pockystation;
 extern crate time;
-extern crate rustc_serialize;
+extern crate serde;
 
 /// Static system information sent to the frontend on request
 const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -69,8 +67,6 @@ struct Context {
     /// `rtc_host_sync` is true. Decreases by one every frame,
     /// synchronizes when it reaches 0.
     rtc_sync_counter: u32,
-    /// Cached value for the maximum savestate size in bytes
-    savestate_max_len: usize,
     /// If true we trigger the debugger when Pause/Break is pressed
     debug_on_key: bool,
 }
@@ -84,7 +80,7 @@ impl Context {
             return Err(());
         }
 
-        let cpu = try!(Context::load(flash));
+        let cpu = Context::load(flash)?;
 
         let mut context = Context {
             cpu: cpu,
@@ -92,15 +88,10 @@ impl Context {
             lcd_rotation_en: true,
             rtc_host_sync: false,
             rtc_sync_counter: 0,
-            savestate_max_len: 0,
             debug_on_key: false,
         };
 
         libretro::Context::refresh_variables(&mut context);
-
-        let max_len = try!(context.compute_savestate_max_length());
-
-        context.savestate_max_len = max_len;
 
         if CoreVariables::debug_on_reset() {
             context.trigger_break();
@@ -266,95 +257,82 @@ impl Context {
         }
     }
 
-    fn compute_savestate_max_length(&mut self) -> Result<usize, ()> {
-        // In order to get the full size we're just going to use a
-        // dummy Write struct which will just count how many bytes are
-        // being written
-        struct WriteCounter(usize);
+    fn save_state(&self, buf: &mut [u8]) -> ::std::result::Result<(), ()> {
+        use serde::Serialize;
 
-        impl ::std::io::Write for WriteCounter {
-            fn write(&mut self, buf: &[u8]) -> ::std::io::Result<usize> {
-                let len = buf.len();
+        let mut fb = flexbuffers::FlexbufferSerializer::new();
 
-                self.0 += len;
+        if let Err(e) = self.cpu.serialize(&mut fb) {
+            error!("Couldn't serialize savestate: {}", e);
+            return Err(());
+        };
 
-                Ok(len)
-            }
+        let fbuf = fb.view();
 
-            fn flush(&mut self) -> ::std::io::Result<()> {
-                Ok(())
-            }
+        if fbuf.len() > buf.len() {
+            error!(
+                "Couldn't serialize savestate because it's too big ({} > {})",
+                fbuf.len(),
+                buf.len()
+            );
+            return Err(());
         }
 
-        let mut counter = WriteCounter(0);
+        buf[0] = b'R';
+        buf[1] = b'S';
+        buf[2] = b'P';
+        buf[3] = b'1';
 
-        try!(self.save_state(&mut counter));
+        let len = (fbuf.len() as u32).to_le_bytes();
 
-        let len = counter.0;
+        buf[4] = len[0];
+        buf[5] = len[1];
+        buf[6] = len[2];
+        buf[7] = len[3];
 
-        // Our savestate format has variable length so let's add a bit of headroom
-        let len = len + 1024;
+        buf[8..(8 + fbuf.len())].clone_from_slice(fbuf);
 
-        Ok(len)
-    }
-
-    fn save_state(&self, writer: &mut ::std::io::Write) -> Result<(), ()> {
-
-        let mut encoder =
-            match savestate::Encoder::new(writer) {
-                Ok(encoder) => encoder,
-                Err(e) => {
-                    warn!("Couldn't create savestate encoder: {:?}", e);
-                    return Err(())
-                }
-            };
-
-        match self.cpu.encode(&mut encoder) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                warn!("Couldn't serialize emulator state: {:?}", e);
-                Err(())
-            }
-        }
+        Ok(())
     }
 
     fn load_state(&mut self, reader: &mut ::std::io::Read) -> Result<(), ()> {
-        let mut decoder =
-            match savestate::Decoder::new(reader) {
-                Ok(decoder) => decoder,
-                Err(e) => {
-                    warn!("Couldn't create savestate decoder: {:?}", e);
-                    return Err(())
-                }
-            };
-
-        let mut cpu: Cpu =
-            match Decodable::decode(&mut decoder) {
-                Ok(cpu) => cpu,
-                Err(e) => {
-                    warn!("Couldn't decode savestate: {:?}", e);
-                    return Err(())
-                }
-            };
-
-        let bios =
-            match Context::find_bios() {
-                Some(c) => c,
-                None => {
-                    error!("Couldn't find a BIOS, bailing out");
-                    return Err(())
-                }
-            };
-
-        let flash = self.cpu.interconnect().flash().data().clone();
-
-        cpu.interconnect_mut().set_bios(bios);
-        cpu.interconnect_mut().flash_mut().set_data(flash);
-        cpu.interconnect_mut().dac_mut().set_backend(Box::new(AudioBackend::new()));
-
-        self.cpu = cpu;
-
-        Ok(())
+        todo!()
+        // let mut decoder =
+        //     match savestate::Decoder::new(reader) {
+        //         Ok(decoder) => decoder,
+        //         Err(e) => {
+        //             warn!("Couldn't create savestate decoder: {:?}", e);
+        //             return Err(())
+        //         }
+        //     };
+        //
+        // let mut cpu: Cpu =
+        //     match Decodable::decode(&mut decoder) {
+        //         Ok(cpu) => cpu,
+        //         Err(e) => {
+        //             warn!("Couldn't decode savestate: {:?}", e);
+        //             return Err(())
+        //         }
+        //     };
+        //
+        // let bios =
+        //     match Context::find_bios() {
+        //         Some(c) => c,
+        //         None => {
+        //             error!("Couldn't find a BIOS, bailing out");
+        //             return Err(())
+        //         }
+        //     };
+        //
+        // let flash = self.cpu.interconnect().flash().data().clone();
+        //
+        // cpu.interconnect_mut().set_bios(bios);
+        // cpu.interconnect_mut().flash_mut().set_data(flash);
+        // cpu.interconnect_mut().dac_mut().set_backend(Box::new(AudioBackend::new()));
+        //
+        // self.cpu = cpu;
+        //
+        // Ok(())
     }
 
     fn poll_controllers(&mut self) {
@@ -393,7 +371,7 @@ impl Context {
             // Handle leap seconds, just in case...
             let secs =
                 match now.tm_sec {
-                    s @ 0...59 => s as u8,
+                    s @ 0..=59 => s as u8,
                     _ => 59,
                 };
 
@@ -499,11 +477,13 @@ impl libretro::Context for Context {
     }
 
     fn serialize_size(&self) -> usize {
-        self.savestate_max_len
+        // Needs to be an upper bound for the savestate size. For now our savestates's layout is
+        // not fixed so the size is not constant (which makes things like netplay impossible)
+        1 * 1024 * 1024
     }
 
     fn serialize(&self, mut buf: &mut [u8]) -> Result<(), ()> {
-        self.save_state(&mut buf)
+        self.save_state(buf)
     }
 
     fn unserialize(&mut self, mut buf: &[u8]) -> Result<(), ()> {

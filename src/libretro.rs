@@ -12,7 +12,7 @@
 
 use std::ptr;
 use std::ffi::{CStr, CString};
-use libc::{c_void, c_char, c_uint, c_float, c_double, size_t, int16_t};
+use libc::{c_void, c_char, c_uint, c_float, c_double, size_t};
 use std::path::PathBuf;
 
 pub trait Context {
@@ -34,9 +34,9 @@ pub trait Context {
     /// Return the maximum size of a save state in bytes
     fn serialize_size(&self) -> usize;
     /// Serialize the savestate in the provided buffer
-    fn serialize(&self, &mut [u8]) -> Result<(), ()>;
+    fn serialize(&self, buf: &mut [u8]) -> Result<(), ()>;
     /// Deserialize the savestate from the provided buffer
-    fn unserialize(&mut self, &[u8]) -> Result<(), ()>;
+    fn unserialize(&mut self, buf: &[u8]) -> Result<(), ()>;
 }
 
 /// Global context instance holding our emulator state. Libretro
@@ -103,10 +103,10 @@ pub type VideoRefreshFn =
                          height: c_uint,
                          pitch: size_t);
 pub type AudioSampleFn =
-    extern "C" fn(left: int16_t, right: int16_t);
+    extern "C" fn(left: i16, right: i16);
 
 pub type AudioSampleBatchFn =
-    unsafe extern "C" fn(data: *const int16_t,
+    unsafe extern "C" fn(data: *const i16,
                          frames: size_t) -> size_t;
 
 pub type InputPollFn = extern "C" fn();
@@ -115,7 +115,7 @@ pub type InputStateFn =
     extern "C" fn(port: c_uint,
                   device: c_uint,
                   index: c_uint,
-                  id:c_uint) -> int16_t;
+                  id:c_uint) -> i16;
 
 #[repr(C)]
 pub struct GameInfo {
@@ -900,7 +900,7 @@ pub mod dummy {
     //! to catch calls to those function in the function pointer has
     //! not yet been loaded.
 
-    use libc::{c_void, c_uint, size_t, int16_t};
+    use libc::{c_void, c_uint, size_t};
 
     pub unsafe extern "C" fn video_refresh(_: *const c_void,
                                        _: c_uint,
@@ -913,7 +913,7 @@ pub mod dummy {
         panic!("Called missing input_poll callback");
     }
 
-    pub unsafe extern "C" fn audio_sample_batch(_: *const int16_t,
+    pub unsafe extern "C" fn audio_sample_batch(_: *const i16,
                                                 _: size_t) -> size_t {
         panic!("Called missing audio_sample_batch callback");
     }
@@ -921,7 +921,7 @@ pub mod dummy {
     pub extern "C" fn input_state(_: c_uint,
                                   _: c_uint,
                                   _: c_uint,
-                                  _: c_uint) -> int16_t {
+                                  _: c_uint) -> i16 {
         panic!("Called missing input_state callback");
     }
 

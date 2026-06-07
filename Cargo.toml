@@ -2,15 +2,17 @@
 name = "pockystation-libretro"
 version = "0.1.0"
 authors = ["Lionel Flandrin <lionel.flandrin@gmail.com>"]
+edition = "2015"
 
 [lib]
 name = "pockystation_retro"
 crate-type = ["dylib"]
 
 [dependencies]
+flexbuffers = "25"
 libc = "0.2"
 time = "0.1"
-rustc-serialize = "0.3"
+serde = "1.0"
 
 [dependencies.log]
 version = "0.4.6"

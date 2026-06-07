@@ -41,10 +41,10 @@ impl GdbRemote {
 
         match self.next_packet() {
             PacketResult::Ok(packet) => {
-                try!(self.ack());
+                self.ack()?;
                 self.handle_packet(debugger, cpu, &packet)
             }
-            PacketResult::BadChecksum(_) => {
+            PacketResult::BadChecksum => {
                 // Request retransmission
                 self.nack()
             }
@@ -64,7 +64,7 @@ impl GdbRemote {
             InPacket,
             WaitForCheckSum,
             WaitForCheckSum2(u8),
-        };
+        }
 
         let mut state = State::WaitForStart;
 
@@ -108,7 +108,7 @@ impl GdbRemote {
                         None => {
                             warn!("Got invalid GDB checksum char {}",
                                      byte);
-                            return PacketResult::BadChecksum(packet);
+                            return PacketResult::BadChecksum;
                         }
                     }
                 }
@@ -120,7 +120,7 @@ impl GdbRemote {
                             if expected != csum {
                                 warn!("Got invalid GDB checksum: {:x} {:x}",
                                       expected, csum);
-                                return PacketResult::BadChecksum(packet);
+                                return PacketResult::BadChecksum;
                             }
 
                             // Checksum is good, we're done!
@@ -129,7 +129,7 @@ impl GdbRemote {
                         None => {
                             warn!("Got invalid GDB checksum char {}",
                                   byte);
-                            return PacketResult::BadChecksum(packet);
+                            return PacketResult::BadChecksum;
                         }
                     }
                 }
@@ -184,7 +184,7 @@ impl GdbRemote {
             };
 
         // Check for errors
-        try!(res);
+        res?;
 
         Ok(())
     }
@@ -269,7 +269,7 @@ impl GdbRemote {
 
         let mut reply = Reply::new();
 
-        let (addr, len) = try!(parse_addr_len(args));
+        let (addr, len) = parse_addr_len(args)?;
 
         if len == 0 {
             // Should we reply with an empty string here? Probably
@@ -352,7 +352,7 @@ impl GdbRemote {
 
         if args.len() > 0 {
             // If an address is provided we restart from there
-            let addr = try!(parse_hex(args));
+            let addr = parse_hex(args)?;
 
             cpu.set_pc(addr);
         }
@@ -395,7 +395,7 @@ impl GdbRemote {
         //
         // I don't think we need any special handling for any of those
         // so I just ignore it for now.
-        let (btype, addr, _kind) = try!(parse_breakpoint(args));
+        let (btype, addr, _kind) = parse_breakpoint(args)?;
 
         match btype {
             b'0' => debugger.add_breakpoint(addr),
@@ -413,7 +413,7 @@ impl GdbRemote {
                       debugger: &mut Debugger,
                       args: &[u8]) -> GdbResult {
 
-        let (btype, addr, kind) = try!(parse_breakpoint(args));
+        let (btype, addr, kind) = parse_breakpoint(args)?;
 
         // Only 32bits standard MIPS mode breakpoint supported
         if kind != b'4' {
@@ -435,7 +435,7 @@ impl GdbRemote {
 
 enum PacketResult {
     Ok(Vec<u8>),
-    BadChecksum(Vec<u8>),
+    BadChecksum,
     EndOfStream,
 }
 
@@ -494,8 +494,8 @@ fn parse_addr_len(args: &[u8]) -> Result<(u32, u32), ()> {
     }
 
     // Parse address
-    let addr = try!(parse_hex(addr));
-    let len = try!(parse_hex(len));
+    let addr = parse_hex(addr)?;
+    let len = parse_hex(len)?;
 
     Ok((addr, len))
 }
@@ -524,7 +524,7 @@ fn parse_breakpoint(args: &[u8]) -> Result<(u8, u32, u8), ()> {
     let btype = btype[0];
     let kind = kind[0];
 
-    let addr = try!(parse_hex(addr));
+    let addr = parse_hex(addr)?;
 
     Ok((btype, addr, kind))
 }
