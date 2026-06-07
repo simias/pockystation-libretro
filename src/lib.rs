@@ -1,23 +1,23 @@
 #[macro_use]
 pub mod libretro;
-mod retrolog;
 mod debugger;
+mod retrolog;
 
-use std::path::{Path, PathBuf};
-use std::fs::{File, metadata};
+use std::fs::{metadata, File};
 use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use libc::c_char;
 
-use pockystation::{MASTER_CLOCK_HZ};
 use pockystation::cpu::Cpu;
-use pockystation::interrupt::Interrupt;
 use pockystation::dac;
 use pockystation::dac::Dac;
-use pockystation::rtc::Bcd;
-use pockystation::memory::{Interconnect, Byte};
+use pockystation::interrupt::Interrupt;
 use pockystation::memory::bios::{Bios, BIOS_SIZE};
 use pockystation::memory::flash::{Flash, FLASH_SIZE};
+use pockystation::memory::{Byte, Interconnect};
+use pockystation::rtc::Bcd;
+use pockystation::MASTER_CLOCK_HZ;
 
 use debugger::Debugger;
 
@@ -26,8 +26,8 @@ extern crate flexbuffers;
 extern crate log;
 extern crate libc;
 extern crate pockystation;
-extern crate time;
 extern crate serde;
+extern crate time;
 
 /// Static system information sent to the frontend on request
 const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -44,12 +44,12 @@ const SYSTEM_AV_INFO: libretro::SystemAvInfo = libretro::SystemAvInfo {
         base_height: 32,
         max_width: 32,
         max_height: 32,
-        aspect_ratio: 1./1.,
+        aspect_ratio: 1. / 1.,
     },
     timing: libretro::SystemTiming {
         fps: 60.,
         sample_rate: dac::SAMPLE_RATE_HZ as f64,
-    }
+    },
 };
 
 struct Context {
@@ -83,7 +83,7 @@ impl Context {
         let cpu = Context::load(flash)?;
 
         let mut context = Context {
-            cpu: cpu,
+            cpu,
             debugger: Debugger::new(),
             lcd_rotation_en: true,
             rtc_host_sync: false,
@@ -101,24 +101,21 @@ impl Context {
     }
 
     fn load(memory_card: &Path) -> Result<Cpu, ()> {
+        let flash = match Context::load_flash(memory_card) {
+            Some(f) => f,
+            None => {
+                error!("Couldn't load flash memory, bailing out");
+                return Err(());
+            }
+        };
 
-        let flash =
-            match Context::load_flash(memory_card) {
-                Some(f) => f,
-                None => {
-                    error!("Couldn't load flash memory, bailing out");
-                    return Err(())
-                }
-            };
-
-        let bios =
-            match Context::find_bios() {
-                Some(c) => c,
-                None => {
-                    error!("Couldn't find a BIOS, bailing out");
-                    return Err(())
-                }
-            };
+        let bios = match Context::find_bios() {
+            Some(c) => c,
+            None => {
+                error!("Couldn't find a BIOS, bailing out");
+                return Err(());
+            }
+        };
 
         let dac = Dac::new(Box::new(AudioBackend::new()));
 
@@ -131,17 +128,16 @@ impl Context {
         match metadata(path) {
             Ok(md) => {
                 if md.len() == FLASH_SIZE as u64 {
-                    let mut file =
-                        match File::open(path) {
-                            Ok(f) => f,
-                            Err(e) => {
-                                warn!("Can't open {:?}: {}", path, e);
-                                return None;
-                            }
-                        };
+                    let mut file = match File::open(path) {
+                        Ok(f) => f,
+                        Err(e) => {
+                            warn!("Can't open {:?}: {}", path, e);
+                            return None;
+                        }
+                    };
 
                     // Load the flash
-                    let mut data = vec![0; FLASH_SIZE as usize];
+                    let mut data = vec![0; FLASH_SIZE];
 
                     if let Err(e) = file.read_exact(&mut data) {
                         warn!("Error while reading {:?}: {}", path, e);
@@ -159,8 +155,11 @@ impl Context {
                         }
                     }
                 } else {
-                    error!("Invalid flash memory length (expected {}, got {})",
-                           FLASH_SIZE, md.len());
+                    error!(
+                        "Invalid flash memory length (expected {}, got {})",
+                        FLASH_SIZE,
+                        md.len()
+                    );
                     None
                 }
             }
@@ -174,25 +173,24 @@ impl Context {
     /// Attempt to find the PocketStation BIOS in the system
     /// directory
     fn find_bios() -> Option<Bios> {
-        let system_directory =
-            match libretro::get_system_directory() {
-                Some(dir) => dir,
-                None => {
-                    error!("The frontend didn't give us a system directory, \
-                            no BIOS can be loaded");
-                    return None;
-                }
-            };
+        let system_directory = match libretro::get_system_directory() {
+            Some(dir) => dir,
+            None => {
+                error!(
+                    "The frontend didn't give us a system directory, \
+                            no BIOS can be loaded"
+                );
+                return None;
+            }
+        };
 
-        let dir =
-            match ::std::fs::read_dir(&system_directory) {
-                Ok(d) => d,
-                Err(e) => {
-                    error!("Can't read directory {:?}: {}",
-                           system_directory, e);
-                    return None;
-                }
-            };
+        let dir = match ::std::fs::read_dir(&system_directory) {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Can't read directory {:?}: {}", system_directory, e);
+                return None;
+            }
+        };
 
         for entry in dir {
             match entry {
@@ -214,9 +212,7 @@ impl Context {
                                 }
                             }
                         }
-                        Err(e) =>
-                            warn!("Ignoring {:?}: can't get file metadata: {}",
-                                  path, e)
+                        Err(e) => warn!("Ignoring {:?}: can't get file metadata: {}", path, e),
                     }
                 }
                 Err(e) => warn!("Error while reading directory: {}", e),
@@ -228,17 +224,16 @@ impl Context {
 
     /// Attempt to read and load the BIOS at `path`
     fn try_bios(path: &Path) -> Option<Bios> {
-        let mut file =
-            match File::open(&path) {
-                Ok(f) => f,
-                Err(e) => {
-                    warn!("Can't open {:?}: {}", path, e);
-                    return None;
-                }
-            };
+        let mut file = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Can't open {:?}: {}", path, e);
+                return None;
+            }
+        };
 
         // Load the BIOS
-        let mut data = vec![0; BIOS_SIZE as usize];
+        let mut data = vec![0; BIOS_SIZE];
 
         if let Err(e) = file.read_exact(&mut data) {
             warn!("Error while reading {:?}: {}", path, e);
@@ -295,7 +290,7 @@ impl Context {
         Ok(())
     }
 
-    fn load_state(&mut self, reader: &mut ::std::io::Read) -> Result<(), ()> {
+    fn load_state(&mut self, _reader: &mut dyn (::std::io::Read)) -> Result<(), ()> {
         todo!()
         // let mut decoder =
         //     match savestate::Decoder::new(reader) {
@@ -339,12 +334,7 @@ impl Context {
         let irq_controller = self.cpu.interconnect_mut().irq_controller_mut();
 
         for &(retrobutton, irq) in &BUTTON_MAP {
-            let active =
-                if libretro::button_pressed(0, retrobutton) {
-                    true
-                } else {
-                    false
-                };
+            let active = libretro::button_pressed(0, retrobutton);
 
             irq_controller.set_raw_interrupt(irq, active);
         }
@@ -369,11 +359,10 @@ impl Context {
             let rtc = inter.rtc_mut();
 
             // Handle leap seconds, just in case...
-            let secs =
-                match now.tm_sec {
-                    s @ 0..=59 => s as u8,
-                    _ => 59,
-                };
+            let secs = match now.tm_sec {
+                s @ 0..=59 => s as u8,
+                _ => 59,
+            };
 
             rtc.set_seconds(Bcd::from_binary(secs).unwrap());
             rtc.set_minutes(Bcd::from_binary(now.tm_min as u8).unwrap());
@@ -399,13 +388,10 @@ impl Context {
 }
 
 impl libretro::Context for Context {
-
     fn render_frame(&mut self) {
         self.poll_controllers();
 
-        let debug_request =
-            self.debug_on_key &&
-            libretro::key_pressed(0, libretro::Key::Pause);
+        let debug_request = self.debug_on_key && libretro::key_pressed(0, libretro::Key::Pause);
 
         if debug_request {
             self.trigger_break();
@@ -470,19 +456,17 @@ impl libretro::Context for Context {
         }
     }
 
-    fn gl_context_reset(&mut self) {
-    }
+    fn gl_context_reset(&mut self) {}
 
-    fn gl_context_destroy(&mut self) {
-    }
+    fn gl_context_destroy(&mut self) {}
 
     fn serialize_size(&self) -> usize {
         // Needs to be an upper bound for the savestate size. For now our savestates's layout is
         // not fixed so the size is not constant (which makes things like netplay impossible)
-        1 * 1024 * 1024
+        1024 * 1024
     }
 
-    fn serialize(&self, mut buf: &mut [u8]) -> Result<(), ()> {
+    fn serialize(&self, buf: &mut [u8]) -> Result<(), ()> {
         self.save_state(buf)
     }
 
@@ -497,26 +481,27 @@ fn init() {
 }
 
 /// Called when a game is loaded and a new context must be built
-fn load_game(memory: PathBuf) -> Option<Box<libretro::Context>> {
+fn load_game(memory: PathBuf) -> Option<Box<dyn libretro::Context>> {
     info!("Loading {:?}", memory);
 
-    Context::new(&memory).ok()
-        .map(|c| Box::new(c) as Box<libretro::Context>)
+    Context::new(&memory)
+        .ok()
+        .map(|c| Box::new(c) as Box<dyn libretro::Context>)
 }
 
 libretro_variables!(
-    struct CoreVariables (prefix = "pockystation") {
-        rtc_host_sync: bool, parse_bool
-            => "Synchronize real-time clock with host; disabled|enabled",
-        lcd_rotation_en: bool, parse_bool
-            => "Display rotation; enabled|disabled",
-        debug_on_bkpt: bool, parse_bool
-            => "Trigger debugger on BKPT instructions; disabled|enabled",
-        debug_on_key: bool, parse_bool
-            => "Trigger debugger when Pause/Break is pressed; disabled|enabled",
-        debug_on_reset: bool, parse_bool
-            => "Trigger debugger on start or reset; disabled|enabled",
-    });
+struct CoreVariables (prefix = "pockystation") {
+    rtc_host_sync: bool, parse_bool
+        => "Synchronize real-time clock with host; disabled|enabled",
+    lcd_rotation_en: bool, parse_bool
+        => "Display rotation; enabled|disabled",
+    debug_on_bkpt: bool, parse_bool
+        => "Trigger debugger on BKPT instructions; disabled|enabled",
+    debug_on_key: bool, parse_bool
+        => "Trigger debugger when Pause/Break is pressed; disabled|enabled",
+    debug_on_reset: bool, parse_bool
+        => "Trigger debugger on start or reset; disabled|enabled",
+});
 
 fn parse_bool(opt: &str) -> Result<bool, ()> {
     match opt {
@@ -564,12 +549,13 @@ impl dac::Backend for AudioBackend {
     }
 }
 
-const BUTTON_MAP: [(libretro::JoyPadButton, Interrupt); 5] =
-    [(libretro::JoyPadButton::A,     Interrupt::ActionButton),
-     (libretro::JoyPadButton::Up,    Interrupt::UpButton),
-     (libretro::JoyPadButton::Down,  Interrupt::DownButton),
-     (libretro::JoyPadButton::Left,  Interrupt::LeftButton),
-     (libretro::JoyPadButton::Right, Interrupt::RightButton)];
+const BUTTON_MAP: [(libretro::JoyPadButton, Interrupt); 5] = [
+    (libretro::JoyPadButton::A, Interrupt::ActionButton),
+    (libretro::JoyPadButton::Up, Interrupt::UpButton),
+    (libretro::JoyPadButton::Down, Interrupt::DownButton),
+    (libretro::JoyPadButton::Left, Interrupt::LeftButton),
+    (libretro::JoyPadButton::Right, Interrupt::RightButton),
+];
 
 /// Number of frame elapsing between RTC synchronization (if the
 /// option is enabled).

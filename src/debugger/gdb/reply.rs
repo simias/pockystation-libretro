@@ -1,4 +1,3 @@
-
 pub struct Reply {
     /// Packet data
     data: Vec<u8>,
@@ -14,10 +13,7 @@ impl Reply {
         // Each reply begins with a dollar sign
         data.push(b'$');
 
-        Reply {
-            data: data,
-            csum: 0,
-        }
+        Reply { data, csum: 0 }
     }
 
     pub fn push(&mut self, data: &[u8]) {
@@ -36,10 +32,7 @@ impl Reply {
     pub fn push_u8(&mut self, byte: u8) {
         let to_hex = b"0123456789abcdef";
 
-        self.push(&[
-            to_hex[(byte >> 4) as usize],
-            to_hex[(byte & 0xf) as usize],
-            ])
+        self.push(&[to_hex[(byte >> 4) as usize], to_hex[(byte & 0xf) as usize]])
     }
 
     /// Push an u16 as 2 little endian bytes

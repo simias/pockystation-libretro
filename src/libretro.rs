@@ -10,10 +10,10 @@
 //! Callback typedefs are altered in the same way and suffixed with
 //! `Fn` for clarity.
 
-use std::ptr;
+use libc::{c_char, c_double, c_float, c_uint, c_void, size_t};
 use std::ffi::{CStr, CString};
-use libc::{c_void, c_char, c_uint, c_float, c_double, size_t};
 use std::path::PathBuf;
+use std::ptr;
 
 pub trait Context {
     /// Get the system's audio and video parameters
@@ -47,30 +47,28 @@ pub trait Context {
 /// the pointer doesn't actually point to anything and is never
 /// dereferenced. It cannot be 0 however, since that would be a NULL
 /// pointer.
-static mut STATIC_CONTEXT: *mut Context = 1 as *mut dummy::Context;
+static mut STATIC_CONTEXT: *mut dyn Context = std::ptr::dangling_mut::<dummy::Context>();
 
-unsafe fn set_context(context: Box<Context>) {
+unsafe fn set_context(context: Box<dyn Context>) {
     STATIC_CONTEXT = Box::into_raw(context);
 }
 
 unsafe fn drop_context() {
-    Box::from_raw(STATIC_CONTEXT);
+    std::mem::forget(Box::from_raw(STATIC_CONTEXT));
     STATIC_CONTEXT = &mut dummy::Context;
 }
 
-fn context() -> &'static mut Context {
-    unsafe {
-        &mut *STATIC_CONTEXT
-    }
+fn context() -> &'static mut dyn Context {
+    unsafe { &mut *STATIC_CONTEXT }
 }
 
 #[repr(C)]
 pub struct SystemInfo {
-   pub library_name: *const c_char,
-   pub library_version: *const c_char,
-   pub valid_extensions: *const c_char,
-   pub need_fullpath: bool,
-   pub block_extract: bool,
+    pub library_name: *const c_char,
+    pub library_version: *const c_char,
+    pub valid_extensions: *const c_char,
+    pub need_fullpath: bool,
+    pub block_extract: bool,
 }
 
 #[repr(C)]
@@ -94,28 +92,18 @@ pub struct SystemAvInfo {
     pub timing: SystemTiming,
 }
 
-pub type EnvironmentFn =
-    unsafe extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
+pub type EnvironmentFn = unsafe extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
 
 pub type VideoRefreshFn =
-    unsafe extern "C" fn(data: *const c_void,
-                         width: c_uint,
-                         height: c_uint,
-                         pitch: size_t);
-pub type AudioSampleFn =
-    extern "C" fn(left: i16, right: i16);
+    unsafe extern "C" fn(data: *const c_void, width: c_uint, height: c_uint, pitch: size_t);
+pub type AudioSampleFn = extern "C" fn(left: i16, right: i16);
 
-pub type AudioSampleBatchFn =
-    unsafe extern "C" fn(data: *const i16,
-                         frames: size_t) -> size_t;
+pub type AudioSampleBatchFn = unsafe extern "C" fn(data: *const i16, frames: size_t) -> size_t;
 
 pub type InputPollFn = extern "C" fn();
 
 pub type InputStateFn =
-    extern "C" fn(port: c_uint,
-                  device: c_uint,
-                  index: c_uint,
-                  id:c_uint) -> i16;
+    extern "C" fn(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16;
 
 #[repr(C)]
 pub struct GameInfo {
@@ -332,9 +320,9 @@ pub enum PixelFormat {
 }
 
 pub mod hw_context {
-    use std::ffi::CString;
-    use libc::{uintptr_t, c_char, c_uint, c_void};
     use super::{call_environment_mut, Environment};
+    use libc::{c_char, c_uint, c_void, uintptr_t};
+    use std::ffi::CString;
 
     pub type ResetFn = extern "C" fn();
 
@@ -397,15 +385,12 @@ pub mod hw_context {
         version_major: 3,
         version_minor: 3,
         cache_context: false,
-        context_destroy: context_destroy,
+        context_destroy,
         debug_context: false,
     };
 
     pub fn init() -> bool {
-        unsafe {
-            call_environment_mut(Environment::SetHwRender,
-                                 &mut STATIC_HW_CONTEXT)
-        }
+        unsafe { call_environment_mut(Environment::SetHwRender, &raw mut STATIC_HW_CONTEXT) }
     }
 
     pub fn get_proc_address(sym: &str) -> *const c_void {
@@ -413,22 +398,18 @@ pub mod hw_context {
         // wrong.
         let sym = CString::new(sym).unwrap();
 
-        unsafe {
-            (STATIC_HW_CONTEXT.get_proc_address)(sym.as_ptr() as *const c_char)
-        }
+        unsafe { (STATIC_HW_CONTEXT.get_proc_address)(sym.as_ptr() as *const c_char) }
     }
 
     pub fn get_current_framebuffer() -> uintptr_t {
-        unsafe {
-            (STATIC_HW_CONTEXT.get_current_framebuffer)()
-        }
+        unsafe { (STATIC_HW_CONTEXT.get_current_framebuffer)() }
     }
 }
 
 pub mod log {
     use super::{call_environment_mut, Environment};
-    use std::ffi::CString;
     use libc::c_char;
+    use std::ffi::CString;
 
     #[repr(C)]
     #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -444,18 +425,14 @@ pub mod log {
     /// variadic `dummy_log`. It doesn't matter anyway, we'll let Rust
     /// do all the formatting and simply pass a single ("%s",
     /// "formatted string").
-    pub type PrintfFn = extern "C" fn(Level,
-                                      *const c_char,
-                                      *const c_char);
+    pub type PrintfFn = extern "C" fn(Level, *const c_char, *const c_char);
 
     #[repr(C)]
     pub struct Callback {
         log: PrintfFn,
     }
 
-    extern "C" fn dummy_log(_: Level,
-                            _: *const c_char,
-                            _: *const c_char) {
+    extern "C" fn dummy_log(_: Level, _: *const c_char, _: *const c_char) {
         panic!("Called missing log callback");
     }
 
@@ -465,8 +442,7 @@ pub mod log {
         let mut cb = Callback { log: dummy_log };
 
         unsafe {
-            let ok = call_environment_mut(Environment::GetLogInterface,
-                                          &mut cb);
+            let ok = call_environment_mut(Environment::GetLogInterface, &mut cb);
 
             if ok {
                 STATIC_LOG = cb.log;
@@ -481,26 +457,23 @@ pub mod log {
         // Make sure the message ends in a \n, mandated by the
         // libretro API.
 
-        let trailing_newline =
-            msg.as_bytes().last().map_or(false, |&c| c == b'\n');
+        let trailing_newline = msg.as_bytes().last().is_some_and(|&c| c == b'\n');
 
-        let format =
-            if trailing_newline {
-                // Message already contains a \n
-                "%s\0"
-            } else {
-                "%s\n\0"
-            };
+        let format = if trailing_newline {
+            // Message already contains a \n
+            "%s\0"
+        } else {
+            "%s\n\0"
+        };
 
         let msg = CString::new(msg);
 
-        let cstr =
-            match msg.as_ref() {
-                Ok(s) => s.as_ptr(),
-                // XXX we could replace \0 in the log with something
-                // else instead.
-                _ => b"<Invalid log message>" as *const _ as *const c_char,
-            };
+        let cstr = match msg.as_ref() {
+            Ok(s) => s.as_ptr(),
+            // XXX we could replace \0 in the log with something
+            // else instead.
+            _ => b"<Invalid log message>" as *const _ as *const c_char,
+        };
 
         unsafe {
             STATIC_LOG(lvl, format.as_ptr() as *const _, cstr);
@@ -535,10 +508,7 @@ pub fn gl_frame_done(width: u32, height: u32) {
         // When using a hardware renderer we set the data pointer to
         // -1 to notify the frontend that the frame has been rendered
         // in the framebuffer.
-        VIDEO_REFRESH(-1isize as *const _,
-                      width as c_uint,
-                      height as c_uint,
-                      0);
+        VIDEO_REFRESH(-1isize as *const _, width as c_uint, height as c_uint, 0);
     }
 }
 
@@ -549,9 +519,7 @@ pub fn send_audio_samples(samples: &[i16]) {
 
     let frames = (samples.len() / 2) as size_t;
 
-    let r = unsafe {
-        AUDIO_SAMPLE_BATCH(samples.as_ptr(), frames)
-    };
+    let r = unsafe { AUDIO_SAMPLE_BATCH(samples.as_ptr(), frames) };
 
     if r != frames {
         panic!("Frontend didn't use all our samples! ({} != {})", r, frames);
@@ -560,30 +528,30 @@ pub fn send_audio_samples(samples: &[i16]) {
 
 pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
     unsafe {
-        INPUT_STATE(port as c_uint,
-                    InputDevice::JoyPad as c_uint,
-                    0,
-                    b as c_uint) != 0
+        INPUT_STATE(
+            port as c_uint,
+            InputDevice::JoyPad as c_uint,
+            0,
+            b as c_uint,
+        ) != 0
     }
 }
 
 pub fn key_pressed(port: u8, k: Key) -> bool {
     unsafe {
-        INPUT_STATE(port as c_uint,
-                    InputDevice::Keyboard as c_uint,
-                    0,
-                    k as c_uint) != 0
+        INPUT_STATE(
+            port as c_uint,
+            InputDevice::Keyboard as c_uint,
+            0,
+            k as c_uint,
+        ) != 0
     }
 }
 
 pub fn get_system_directory() -> Option<PathBuf> {
     let mut path: *const c_char = ptr::null();
 
-    let success =
-        unsafe {
-            call_environment_mut(Environment::GetSystemDirectory,
-                                 &mut path)
-        };
+    let success = unsafe { call_environment_mut(Environment::GetSystemDirectory, &mut path) };
 
     if success && !path.is_null() {
         let path = unsafe { CStr::from_ptr(path) };
@@ -597,15 +565,11 @@ pub fn get_system_directory() -> Option<PathBuf> {
 pub fn set_pixel_format(format: PixelFormat) -> bool {
     let f = format as c_uint;
 
-    unsafe {
-        call_environment(Environment::SetPixelFormat, &f)
-    }
+    unsafe { call_environment(Environment::SetPixelFormat, &f) }
 }
 
 pub fn set_geometry(geom: &GameGeometry) -> bool {
-    unsafe {
-        call_environment(Environment::SetGeometry, geom)
-    }
+    unsafe { call_environment(Environment::SetGeometry, geom) }
 }
 
 /// Can destroy the OpenGL context!
@@ -617,13 +581,15 @@ pub unsafe fn set_system_av_info(av_info: &SystemAvInfo) -> bool {
 pub fn set_message(nframes: u32, msg: &str) {
     let msg = CString::new(msg);
 
-    let cstr =
-        match msg.as_ref() {
-            Ok(s) => s.as_ptr(),
-            _ => b"<Invalid log message>" as *const _ as *const c_char,
-        };
+    let cstr = match msg.as_ref() {
+        Ok(s) => s.as_ptr(),
+        _ => b"<Invalid log message>" as *const _ as *const c_char,
+    };
 
-    let message = Message { msg: cstr, frames: nframes as c_uint };
+    let message = Message {
+        msg: cstr,
+        frames: nframes as c_uint,
+    };
 
     unsafe {
         call_environment(Environment::SetMessage, &message);
@@ -633,11 +599,7 @@ pub fn set_message(nframes: u32, msg: &str) {
 pub fn variables_need_update() -> bool {
     let mut needs_update = false;
 
-    let ok =
-        unsafe {
-            call_environment_mut(Environment::GetVariableUpdate,
-                                 &mut needs_update)
-        };
+    let ok = unsafe { call_environment_mut(Environment::GetVariableUpdate, &mut needs_update) };
 
     if !ok {
         panic!("Environment::GetVariableUpdate failed");
@@ -651,8 +613,8 @@ pub unsafe fn register_variables(variables: &[Variable]) -> bool {
     call_environment_slice(Environment::SetVariables, variables)
 }
 
-unsafe fn call_environment_mut<T>(which: Environment, var: &mut T) -> bool {
-    ENVIRONMENT(which as c_uint, var as *mut _ as *mut c_void)
+unsafe fn call_environment_mut<T>(which: Environment, var: *mut T) -> bool {
+    ENVIRONMENT(which as c_uint, var as *mut c_void)
 }
 
 unsafe fn call_environment<T>(which: Environment, var: &T) -> bool {
@@ -666,7 +628,6 @@ unsafe fn call_environment_slice<T>(which: Environment, var: &[T]) -> bool {
 /// Cast a mutable pointer into a mutable reference, return None if
 /// it's NULL.
 fn ptr_as_mut_ref<'a, T>(v: *mut T) -> Option<&'a mut T> {
-
     if v.is_null() {
         None
     } else {
@@ -676,7 +637,6 @@ fn ptr_as_mut_ref<'a, T>(v: *mut T) -> Option<&'a mut T> {
 
 /// Cast a const pointer into a reference, return None if it's NULL.
 fn ptr_as_ref<'a, T>(v: *const T) -> Option<&'a T> {
-
     if v.is_null() {
         None
     } else {
@@ -696,43 +656,32 @@ pub extern "C" fn retro_api_version() -> c_uint {
 
 #[no_mangle]
 pub extern "C" fn retro_set_environment(callback: EnvironmentFn) {
-    unsafe {
-        ENVIRONMENT = callback
-    }
+    unsafe { ENVIRONMENT = callback }
 
     ::init_variables();
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_video_refresh(callback: VideoRefreshFn) {
-    unsafe {
-        VIDEO_REFRESH = callback
-    }
+    unsafe { VIDEO_REFRESH = callback }
 }
 
 #[no_mangle]
-pub extern "C" fn retro_set_audio_sample(_: AudioSampleFn) {
-}
+pub extern "C" fn retro_set_audio_sample(_: AudioSampleFn) {}
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample_batch(callback: AudioSampleBatchFn) {
-    unsafe {
-        AUDIO_SAMPLE_BATCH = callback
-    }
+    unsafe { AUDIO_SAMPLE_BATCH = callback }
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_poll(callback: InputPollFn) {
-    unsafe {
-        INPUT_POLL = callback
-    }
+    unsafe { INPUT_POLL = callback }
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_state(callback: InputStateFn) {
-    unsafe {
-        INPUT_STATE = callback
-    }
+    unsafe { INPUT_STATE = callback }
 }
 
 static mut FIRST_INIT: bool = true;
@@ -772,8 +721,7 @@ pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
 }
 
 #[no_mangle]
-pub extern "C" fn retro_set_controller_port_device(_port: c_uint,
-                                                   _device: c_uint) {
+pub extern "C" fn retro_set_controller_port_device(_port: c_uint, _device: c_uint) {
     debug!("port device: {} {}", _port, _device);
 }
 
@@ -801,11 +749,8 @@ pub extern "C" fn retro_serialize_size() -> size_t {
 }
 
 #[no_mangle]
-pub extern "C" fn retro_serialize(data: *mut c_void,
-                                  size: size_t) -> bool {
-    let data = unsafe {
-        ::std::slice::from_raw_parts_mut(data as *mut u8, size)
-    };
+pub extern "C" fn retro_serialize(data: *mut c_void, size: size_t) -> bool {
+    let data = unsafe { ::std::slice::from_raw_parts_mut(data as *mut u8, size) };
 
     // Set the buffer to 0 in case parts of it remain unused, it'll
     // avoid putting garbage in the save file and might help with
@@ -818,24 +763,17 @@ pub extern "C" fn retro_serialize(data: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn retro_unserialize(data: *const c_void,
-                                    size: size_t) -> bool {
-    let data = unsafe {
-        ::std::slice::from_raw_parts(data as *const u8, size)
-    };
+pub extern "C" fn retro_unserialize(data: *const c_void, size: size_t) -> bool {
+    let data = unsafe { ::std::slice::from_raw_parts(data as *const u8, size) };
 
     context().unserialize(data).is_ok()
 }
 
 #[no_mangle]
-pub extern "C" fn retro_cheat_reset() {
-}
+pub extern "C" fn retro_cheat_reset() {}
 
 #[no_mangle]
-pub fn retro_cheat_set(_index: c_uint,
-                       _enabled: bool,
-                       _code: *const c_char) {
-}
+pub fn retro_cheat_set(_index: c_uint, _enabled: bool, _code: *const c_char) {}
 
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
@@ -848,11 +786,10 @@ pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
 
     let path = unsafe { CStr::from_ptr(info.path) };
 
-    let path =
-        match build_path(path) {
-            Some(p) => p,
-            None => return false,
-        };
+    let path = match build_path(path) {
+        Some(p) => p,
+        None => return false,
+    };
 
     match ::load_game(path) {
         Some(c) => {
@@ -869,14 +806,16 @@ pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn retro_load_game_special(_type: c_uint,
-                                          _info: *const GameInfo,
-                                          _num_info: size_t) -> bool {
+pub extern "C" fn retro_load_game_special(
+    _type: c_uint,
+    _info: *const GameInfo,
+    _num_info: size_t,
+) -> bool {
     false
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn retro_unload_game()  {
+pub unsafe extern "C" fn retro_unload_game() {
     drop_context();
 }
 
@@ -900,12 +839,9 @@ pub mod dummy {
     //! to catch calls to those function in the function pointer has
     //! not yet been loaded.
 
-    use libc::{c_void, c_uint, size_t};
+    use libc::{c_uint, c_void, size_t};
 
-    pub unsafe extern "C" fn video_refresh(_: *const c_void,
-                                       _: c_uint,
-                                       _: c_uint,
-                                       _: size_t) {
+    pub unsafe extern "C" fn video_refresh(_: *const c_void, _: c_uint, _: c_uint, _: size_t) {
         panic!("Called missing video_refresh callback");
     }
 
@@ -913,15 +849,11 @@ pub mod dummy {
         panic!("Called missing input_poll callback");
     }
 
-    pub unsafe extern "C" fn audio_sample_batch(_: *const i16,
-                                                _: size_t) -> size_t {
+    pub unsafe extern "C" fn audio_sample_batch(_: *const i16, _: size_t) -> size_t {
         panic!("Called missing audio_sample_batch callback");
     }
 
-    pub extern "C" fn input_state(_: c_uint,
-                                  _: c_uint,
-                                  _: c_uint,
-                                  _: c_uint) -> i16 {
+    pub extern "C" fn input_state(_: c_uint, _: c_uint, _: c_uint, _: c_uint) -> i16 {
         panic!("Called missing input_state callback");
     }
 
@@ -993,24 +925,26 @@ fn build_path(cstr: &CStr) -> Option<PathBuf> {
     match cstr.to_str() {
         Ok(s) => Some(PathBuf::from(s)),
         Err(_) => {
-            error!("The frontend gave us an invalid path: {}",
-                   cstr.to_string_lossy());
+            error!(
+                "The frontend gave us an invalid path: {}",
+                cstr.to_string_lossy()
+            );
             None
         }
     }
 }
 
-pub unsafe fn get_variable<T, E>(var: &str,
-                                 var_cstr: *const c_char,
-                                 parser: fn (&str) -> Result<T, E>) -> T
-{
+pub unsafe fn get_variable<T, E>(
+    var: &str,
+    var_cstr: *const c_char,
+    parser: fn(&str) -> Result<T, E>,
+) -> T {
     let mut v = Variable {
         key: var_cstr as *const _,
         value: ptr::null(),
     };
 
-    let ok =
-        call_environment_mut(Environment::GetVariable, &mut v);
+    let ok = call_environment_mut(Environment::GetVariable, &mut v);
 
     if !ok || v.value.is_null() {
         panic!("Couldn't get variable {}", var);

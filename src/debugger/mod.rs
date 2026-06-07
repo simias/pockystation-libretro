@@ -2,8 +2,8 @@ use std::net::TcpListener;
 
 use pockystation::debugger::Debugger as DebuggerInterface;
 
-use pockystation::cpu::Cpu;
 use self::gdb::GdbRemote;
+use pockystation::cpu::Cpu;
 
 mod gdb;
 
@@ -32,16 +32,15 @@ impl Debugger {
         let bind_to = "127.0.0.1:9002";
 
         // XXX The bind address/port should be configurable
-        let listener =
-            match TcpListener::bind(bind_to) {
-                Ok(l)  => l,
-                Err(e) => panic!("Couldn't bind GDB server TCP socket: {}", e),
-            };
+        let listener = match TcpListener::bind(bind_to) {
+            Ok(l) => l,
+            Err(e) => panic!("Couldn't bind GDB server TCP socket: {}", e),
+        };
 
         info!("Waiting for debugger on {}", bind_to);
 
         Debugger {
-            listener: listener,
+            listener,
             client: None,
             resume: true,
             step: false,
@@ -57,18 +56,17 @@ impl Debugger {
         // an other reason (data watchpoint for instance)
         self.step = false;
 
-        let mut client =
-            match self.client.take() {
-                Some(mut c) => {
-                    // Notify the remote that we're halted and waiting
-                    // for instructions. I ignore errors here for
-                    // simplicity, if the connection hung up for some
-                    // reason we'll figure it out soon enough.
-                    let _ = c.send_status();
-                    c
-                }
-                None => GdbRemote::new(&self.listener),
-            };
+        let mut client = match self.client.take() {
+            Some(mut c) => {
+                // Notify the remote that we're halted and waiting
+                // for instructions. I ignore errors here for
+                // simplicity, if the connection hung up for some
+                // reason we'll figure it out soon enough.
+                let _ = c.send_status();
+                c
+            }
+            None => GdbRemote::new(&self.listener),
+        };
 
         // We loop as long as the remote debugger doesn't tell us to
         // continue
@@ -78,7 +76,7 @@ impl Debugger {
             // Inner debugger loop: handle client requests until it
             // requests that the execution resumes or an error is
             // encountered
-            if let Err(_) = client.serve(self, cpu) {
+            if client.serve(self, cpu).is_err() {
                 // We encountered an error with the remote client: we
                 // wait for a new connection
                 client = GdbRemote::new(&self.listener);

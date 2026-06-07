@@ -1,10 +1,10 @@
 //! Logger implementation using libretro as a backend
 
+use libretro;
 use log;
 use log::set_boxed_logger;
-use libretro;
 
-use std::io::{Write, stderr};
+use std::io::{stderr, Write};
 
 struct RetroLogger;
 
@@ -17,22 +17,20 @@ impl log::Log for RetroLogger {
         if self.enabled(record.metadata()) {
             let s = ::std::fmt::format(*record.args());
 
-            let lvl =
-                match record.level() {
-                    log::Level::Error => libretro::log::Level::Error,
-                    log::Level::Warn => libretro::log::Level::Warn,
-                    log::Level::Info => libretro::log::Level::Info,
-                    log::Level::Debug => libretro::log::Level::Debug,
-                    // Nothing below Debug in libretro
-                    log::Level::Trace => libretro::log::Level::Debug,
-                };
+            let lvl = match record.level() {
+                log::Level::Error => libretro::log::Level::Error,
+                log::Level::Warn => libretro::log::Level::Warn,
+                log::Level::Info => libretro::log::Level::Info,
+                log::Level::Debug => libretro::log::Level::Debug,
+                // Nothing below Debug in libretro
+                log::Level::Trace => libretro::log::Level::Debug,
+            };
 
             libretro::log::log(lvl, &s);
         }
     }
 
-    fn flush(&self) {
-    }
+    fn flush(&self) {}
 }
 
 struct StdErrLogger;
@@ -44,11 +42,7 @@ impl log::Log for StdErrLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            let _ =
-                writeln!(&mut stderr(),
-                         "{} - {}",
-                         record.level(),
-                         record.args());
+            let _ = writeln!(&mut stderr(), "{} - {}", record.level(), record.args());
         }
     }
 
@@ -60,12 +54,11 @@ impl log::Log for StdErrLogger {
 pub fn init() {
     let retrolog_ok = libretro::log::init();
 
-    let logger: Box<log::Log> =
-        if retrolog_ok {
-            Box::new(RetroLogger)
-        } else {
-            Box::new(StdErrLogger)
-        };
+    let logger: Box<dyn log::Log> = if retrolog_ok {
+        Box::new(RetroLogger)
+    } else {
+        Box::new(StdErrLogger)
+    };
 
     set_boxed_logger(logger).unwrap();
 

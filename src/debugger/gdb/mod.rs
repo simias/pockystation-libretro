@@ -1,5 +1,5 @@
-use std::net::{TcpListener, TcpStream};
 use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 
 use pockystation::cpu::Cpu;
 use pockystation::memory::{Byte, HalfWord, Word};
@@ -20,25 +20,19 @@ impl GdbRemote {
     pub fn new(listener: &TcpListener) -> GdbRemote {
         info!("Debugger waiting for gdb connection...");
 
-        let remote =
-            match listener.accept() {
-                Ok((stream, sockaddr)) => {
-                    info!("Connection from {}", sockaddr);
-                    stream
-                }
-                Err(e) => panic!("Accept failed: {}", e),
-            };
+        let remote = match listener.accept() {
+            Ok((stream, sockaddr)) => {
+                info!("Connection from {}", sockaddr);
+                stream
+            }
+            Err(e) => panic!("Accept failed: {}", e),
+        };
 
-        GdbRemote {
-            remote: remote,
-        }
+        GdbRemote { remote }
     }
 
     // Serve a single remote request
-    pub fn serve(&mut self,
-                 debugger: &mut Debugger,
-                 cpu: &mut Cpu) -> GdbResult {
-
+    pub fn serve(&mut self, debugger: &mut Debugger, cpu: &mut Cpu) -> GdbResult {
         match self.next_packet() {
             PacketResult::Ok(packet) => {
                 self.ack()?;
@@ -57,7 +51,6 @@ impl GdbRemote {
 
     /// Attempt to return a single GDB packet.
     fn next_packet(&mut self) -> PacketResult {
-
         // Parser state machine
         enum State {
             WaitForStart,
@@ -72,17 +65,15 @@ impl GdbRemote {
         let mut csum = 0u8;
 
         for r in (&self.remote).bytes() {
+            let byte = match r {
+                Ok(b) => b,
+                Err(e) => {
+                    warn!("GDB remote error: {}", e);
+                    return PacketResult::EndOfStream;
+                }
+            };
 
-            let byte =
-                match r {
-                    Ok(b)  => b,
-                    Err(e) => {
-                        warn!("GDB remote error: {}", e);
-                        return PacketResult::EndOfStream;
-                    }
-                };
-
-             match state {
+            match state {
                 State::WaitForStart => {
                     if byte == b'$' {
                         // Start of packet
@@ -100,26 +91,22 @@ impl GdbRemote {
                         csum = csum.wrapping_add(byte);
                     }
                 }
-                State::WaitForCheckSum => {
-                    match ascii_hex(byte) {
-                        Some(b) => {
-                            state = State::WaitForCheckSum2(b);
-                        }
-                        None => {
-                            warn!("Got invalid GDB checksum char {}",
-                                     byte);
-                            return PacketResult::BadChecksum;
-                        }
+                State::WaitForCheckSum => match ascii_hex(byte) {
+                    Some(b) => {
+                        state = State::WaitForCheckSum2(b);
                     }
-                }
+                    None => {
+                        warn!("Got invalid GDB checksum char {}", byte);
+                        return PacketResult::BadChecksum;
+                    }
+                },
                 State::WaitForCheckSum2(c1) => {
                     match ascii_hex(byte) {
                         Some(c2) => {
                             let expected = (c1 << 4) | c2;
 
                             if expected != csum {
-                                warn!("Got invalid GDB checksum: {:x} {:x}",
-                                      expected, csum);
+                                warn!("Got invalid GDB checksum: {:x} {:x}", expected, csum);
                                 return PacketResult::BadChecksum;
                             }
 
@@ -127,8 +114,7 @@ impl GdbRemote {
                             return PacketResult::Ok(packet);
                         }
                         None => {
-                            warn!("Got invalid GDB checksum char {}",
-                                  byte);
+                            warn!("Got invalid GDB checksum char {}", byte);
                             return PacketResult::BadChecksum;
                         }
                     }
@@ -137,12 +123,11 @@ impl GdbRemote {
         }
 
         warn!("GDB remote end of stream");
-        return PacketResult::EndOfStream;
+        PacketResult::EndOfStream
     }
 
     /// Acknowledge packet reception
     fn ack(&mut self) -> GdbResult {
-
         if let Err(e) = self.remote.write(b"+") {
             warn!("Couldn't send ACK to GDB remote: {}", e);
             Err(())
@@ -153,7 +138,6 @@ impl GdbRemote {
 
     /// Request packet retransmission
     fn nack(&mut self) -> GdbResult {
-
         if let Err(e) = self.remote.write(b"-") {
             warn!("Couldn't send NACK to GDB remote: {}", e);
             Err(())
@@ -162,26 +146,26 @@ impl GdbRemote {
         }
     }
 
-    fn handle_packet(&mut self,
-                     debugger: &mut Debugger,
-                     cpu: &mut Cpu,
-                     packet: &[u8]) -> GdbResult {
-
+    fn handle_packet(
+        &mut self,
+        debugger: &mut Debugger,
+        cpu: &mut Cpu,
+        packet: &[u8],
+    ) -> GdbResult {
         let command = packet[0];
         let args = &packet[1..];
 
-        let res =
-            match command {
-                b'?' => self.send_status(),
-                b'm' => self.read_memory(cpu, args),
-                b'g' => self.read_registers(cpu),
-                b'c' => self.resume(debugger, cpu, args),
-                b's' => self.step(debugger, cpu, args),
-                b'Z' => self.add_breakpoint(debugger, args),
-                b'z' => self.del_breakpoint(debugger, args),
-                // Send empty response for unsupported packets
-                _ => self.send_empty_reply(),
-            };
+        let res = match command {
+            b'?' => self.send_status(),
+            b'm' => self.read_memory(cpu, args),
+            b'g' => self.read_registers(cpu),
+            b'c' => self.resume(debugger, cpu, args),
+            b's' => self.step(debugger, cpu, args),
+            b'Z' => self.add_breakpoint(debugger, args),
+            b'z' => self.del_breakpoint(debugger, args),
+            // Send empty response for unsupported packets
+            _ => self.send_empty_reply(),
+        };
 
         // Check for errors
         res?;
@@ -263,10 +247,7 @@ impl GdbRemote {
 
     /// Read a region of memory. The packet format should be
     /// `ADDR,LEN`, both in hexadecimal
-    fn read_memory(&mut self,
-                   cpu: &mut Cpu,
-                   args: &[u8]) -> GdbResult {
-
+    fn read_memory(&mut self, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
         let mut reply = Reply::new();
 
         let (addr, len) = parse_addr_len(args)?;
@@ -283,32 +264,31 @@ impl GdbRemote {
         // accessing and select the most meaningful access width.
         let align = addr % 4;
 
-        let sent =
-            match align {
-                1|3 => {
-                    // If we fall on the first or third byte of a word
-                    // we use byte accesses until we reach the next
-                    // word or the end of the requested length
-                    let count = ::std::cmp::min(len, 4 - align);
+        let sent = match align {
+            1 | 3 => {
+                // If we fall on the first or third byte of a word
+                // we use byte accesses until we reach the next
+                // word or the end of the requested length
+                let count = ::std::cmp::min(len, 4 - align);
 
-                    for i in 0..count {
-                        let b = cpu.examine::<Byte>(addr.wrapping_add(i));
-                        reply.push_u8(b as u8);
-                    }
-                    count
+                for i in 0..count {
+                    let b = cpu.examine::<Byte>(addr.wrapping_add(i));
+                    reply.push_u8(b as u8);
                 }
-                2 => {
-                    if len == 1 {
-                        // Only one byte to read
-                        reply.push_u8(cpu.examine::<Byte>(addr) as u8);
-                        1
-                    } else {
-                        reply.push_u16(cpu.examine::<HalfWord>(addr) as u16);
-                        2
-                    }
+                count
+            }
+            2 => {
+                if len == 1 {
+                    // Only one byte to read
+                    reply.push_u8(cpu.examine::<Byte>(addr) as u8);
+                    1
+                } else {
+                    reply.push_u16(cpu.examine::<HalfWord>(addr) as u16);
+                    2
                 }
-                _ => 0,
-            };
+            }
+            _ => 0,
+        };
 
         let addr = addr.wrapping_add(sent);
         let len = len - sent;
@@ -329,7 +309,7 @@ impl GdbRemote {
         let rem = len - nwords * 4;
 
         match rem {
-            1|3 => {
+            1 | 3 => {
                 for i in 0..rem {
                     let b = cpu.examine::<Byte>(addr.wrapping_add(i));
                     reply.push_u8(b as u8);
@@ -338,19 +318,15 @@ impl GdbRemote {
             2 => {
                 reply.push_u16(cpu.examine::<HalfWord>(addr) as u16);
             }
-            _ => ()
+            _ => (),
         }
 
         self.send_reply(reply)
     }
 
     /// Continue execution
-    fn resume(&mut self,
-              debugger: &mut Debugger,
-              cpu: &mut Cpu,
-              args: &[u8]) -> GdbResult {
-
-        if args.len() > 0 {
+    fn resume(&mut self, debugger: &mut Debugger, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
+        if !args.is_empty() {
             // If an address is provided we restart from there
             let addr = parse_hex(args)?;
 
@@ -365,23 +341,16 @@ impl GdbRemote {
 
     // Step works exactly like continue except that we're only
     // supposed to execute a single instruction.
-    fn step(&mut self,
-            debugger: &mut Debugger,
-            cpu: &mut Cpu,
-            args: &[u8]) -> GdbResult {
-
+    fn step(&mut self, debugger: &mut Debugger, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
         debugger.set_step();
 
         self.resume(debugger, cpu, args)
     }
 
     // Add a breakpoint or watchpoint
-    fn add_breakpoint(&mut self,
-                      debugger: &mut Debugger,
-                      args: &[u8]) -> GdbResult {
-
+    fn add_breakpoint(&mut self, debugger: &mut Debugger, args: &[u8]) -> GdbResult {
         // Check if the request contains a command list
-        if args.iter().any(|&b| b == b';') {
+        if args.contains(&b';') {
             // Not sure if I should signal an error or send an empty
             // reply here to signal that command lists are not
             // supported. I think GDB will think that we don't support
@@ -409,10 +378,7 @@ impl GdbRemote {
     }
 
     // Delete a breakpoint or watchpoint
-    fn del_breakpoint(&mut self,
-                      debugger: &mut Debugger,
-                      args: &[u8]) -> GdbResult {
-
+    fn del_breakpoint(&mut self, debugger: &mut Debugger, args: &[u8]) -> GdbResult {
         let (btype, addr, kind) = parse_breakpoint(args)?;
 
         // Only 32bits standard MIPS mode breakpoint supported
@@ -430,7 +396,6 @@ impl GdbRemote {
 
         self.send_ok()
     }
-
 }
 
 enum PacketResult {
@@ -443,9 +408,9 @@ enum PacketResult {
 /// hexadecimal ASCII digit. Return None if the character is not valid
 /// hexadecimal
 fn ascii_hex(b: u8) -> Option<u8> {
-    if b >= b'0' && b <= b'9' {
+    if (b'0'..=b'9').contains(&b) {
         Some(b - b'0')
-    } else if b >= b'a' && b <= b'f' {
+    } else if (b'a'..=b'f').contains(&b) {
         Some(10 + (b - b'a'))
     } else {
         // Invalid
@@ -461,12 +426,11 @@ fn parse_hex(hex: &[u8]) -> Result<u32, ()> {
     for &b in hex {
         v <<= 4;
 
-        v |=
-            match ascii_hex(b) {
-                Some(h) => h as u32,
-                // Bad hex
-                None => return Err(()),
-            };
+        v |= match ascii_hex(b) {
+            Some(h) => h as u32,
+            // Bad hex
+            None => return Err(()),
+        };
     }
 
     Ok(v)
@@ -476,7 +440,6 @@ fn parse_hex(hex: &[u8]) -> Result<u32, ()> {
 /// strings) and return the values as a tuple. Returns `None` if
 /// the format is bogus.
 fn parse_addr_len(args: &[u8]) -> Result<(u32, u32), ()> {
-
     // split around the comma
     let args: Vec<_> = args.split(|&b| b == b',').collect();
 
@@ -488,7 +451,7 @@ fn parse_addr_len(args: &[u8]) -> Result<(u32, u32), ()> {
     let addr = args[0];
     let len = args[1];
 
-    if addr.len() == 0 || len.len() == 0 {
+    if addr.is_empty() || len.is_empty() {
         // Missing parameter
         return Err(());
     }
