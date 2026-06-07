@@ -4,7 +4,7 @@ use std::net::{TcpListener, TcpStream};
 use pockystation::cpu::Cpu;
 use pockystation::memory::{Byte, HalfWord, Word};
 
-use debugger::Debugger;
+use crate::debugger::Debugger;
 
 use self::reply::Reply;
 
@@ -408,7 +408,7 @@ enum PacketResult {
 /// hexadecimal ASCII digit. Return None if the character is not valid
 /// hexadecimal
 fn ascii_hex(b: u8) -> Option<u8> {
-    if (b'0'..=b'9').contains(&b) {
+    if b.is_ascii_digit() {
         Some(b - b'0')
     } else if (b'a'..=b'f').contains(&b) {
         Some(10 + (b - b'a'))

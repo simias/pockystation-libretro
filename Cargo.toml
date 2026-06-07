@@ -2,7 +2,7 @@
 name = "pockystation-libretro"
 version = "0.1.0"
 authors = ["Lionel Flandrin <lionel.flandrin@gmail.com>"]
-edition = "2015"
+edition = "2018"
 
 [lib]
 name = "pockystation_retro"

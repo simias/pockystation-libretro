@@ -19,7 +19,7 @@ use pockystation::memory::{Byte, Interconnect};
 use pockystation::rtc::Bcd;
 use pockystation::MASTER_CLOCK_HZ;
 
-use debugger::Debugger;
+use crate::debugger::Debugger;
 
 extern crate flexbuffers;
 #[macro_use]
@@ -290,7 +290,7 @@ impl Context {
         Ok(())
     }
 
-    fn load_state(&mut self, _reader: &mut dyn (::std::io::Read)) -> Result<(), ()> {
+    fn load_state(&mut self, _reader: &mut dyn ::std::io::Read) -> Result<(), ()> {
         todo!()
         // let mut decoder =
         //     match savestate::Decoder::new(reader) {

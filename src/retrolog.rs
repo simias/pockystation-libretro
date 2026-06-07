@@ -1,7 +1,6 @@
 //! Logger implementation using libretro as a backend
 
-use libretro;
-use log;
+use crate::libretro;
 use log::set_boxed_logger;
 
 use std::io::{stderr, Write};

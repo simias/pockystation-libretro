@@ -658,7 +658,7 @@ pub extern "C" fn retro_api_version() -> c_uint {
 pub extern "C" fn retro_set_environment(callback: EnvironmentFn) {
     unsafe { ENVIRONMENT = callback }
 
-    ::init_variables();
+    crate::init_variables();
 }
 
 #[no_mangle]
@@ -693,7 +693,7 @@ pub extern "C" fn retro_init() {
     // which makes it rather useless in my opinion. Let's change that.
     unsafe {
         if FIRST_INIT {
-            ::init();
+            crate::init();
             FIRST_INIT = false;
         }
     }
@@ -710,7 +710,7 @@ pub extern "C" fn retro_get_system_info(info: *mut SystemInfo) {
     let info = ptr_as_mut_ref(info).unwrap();
 
     // Strings must be static and, of course, 0-terminated
-    *info = ::SYSTEM_INFO;
+    *info = crate::SYSTEM_INFO;
 }
 
 #[no_mangle]
@@ -791,7 +791,7 @@ pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
         None => return false,
     };
 
-    match ::load_game(path) {
+    match crate::load_game(path) {
         Some(c) => {
             unsafe {
                 set_context(c);
