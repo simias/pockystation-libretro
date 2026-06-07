@@ -11,7 +11,7 @@ homepage = "https://github.com/simias/pockystation"
 repository = "https://github.com/simias/pockystation"
 license = "MIT"
 keywords = ["emulator", "pockystation"]
-edition = "2015"
+edition = "2024"
 
 build = "build.rs"
 
