@@ -1,19 +1,17 @@
-use interrupt::{Interrupt, IrqController};
-use lcd::Lcd;
 use dac::Dac;
+use interrupt::{Interrupt, IrqController};
 use irda::Irda;
+use lcd::Lcd;
 use rtc::Rtc;
 use timer::Timer;
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, Serializer};
 
-use self::ram::Ram;
 use self::bios::Bios;
 use self::flash::Flash;
+use self::ram::Ram;
 
-pub mod ram;
 pub mod bios;
 pub mod flash;
+pub mod ram;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Interconnect {
@@ -34,16 +32,18 @@ pub struct Interconnect {
 impl Interconnect {
     pub fn new(bios: Bios, flash: Flash, dac: Dac) -> Interconnect {
         Interconnect {
-            bios: bios,
-            flash: flash,
+            bios,
+            flash,
             ram: Ram::new(),
             irq_controller: IrqController::new(),
-            timers: [Timer::new(Interrupt::Timer0),
-                     Timer::new(Interrupt::Timer1),
-                     Timer::new(Interrupt::Timer2),],
+            timers: [
+                Timer::new(Interrupt::Timer0),
+                Timer::new(Interrupt::Timer1),
+                Timer::new(Interrupt::Timer2),
+            ],
             rtc: Rtc::new(),
             lcd: Lcd::new(),
-            dac: dac,
+            dac,
             irda: Irda::new(),
             cpu_clk_div: 7,
             frame_ticks: 0,
@@ -120,62 +120,58 @@ impl Interconnect {
             panic!("Missaligned {}bit load at 0x{:08x}", A::size() * 8, addr);
         }
 
-        let unimplemented =
-            || panic!("unhandled load address 0x{:08x}", addr);
+        let unimplemented = || panic!("unhandled load address 0x{:08x}", addr);
 
         match region {
-            0x00 =>
+            0x00 => {
                 if self.flash.bios_at_0() {
                     self.bios.load::<A>(offset)
                 } else {
                     self.ram.load::<A>(offset)
-                },
+                }
+            }
             0x02 => self.flash.load_virtual::<A>(offset),
             0x04 => self.bios.load::<A>(offset),
             0x06 => self.flash.load_config::<A>(offset),
             0x08 => self.flash.load_raw::<A>(offset),
-            0x0a =>
-                match offset {
-                    0x00...0x10 => self.irq_controller.load::<A>(offset),
-                    0x800000...0x800028 => {
-                        let timer = (offset >> 8) & 3;
+            0x0a => match offset {
+                0x00..=0x10 => self.irq_controller.load::<A>(offset),
+                0x800000..=0x800028 => {
+                    let timer = (offset >> 8) & 3;
 
-                        self.timers[timer as usize].load::<A>(offset & 0xf)
-                    }
-                    _ => unimplemented(),
-                },
-            0x0b =>
-                match offset {
-                    // CLK MODE
-                    0 => {
-                        let div = 7 - self.cpu_clk_div;
+                    self.timers[timer as usize].load::<A>(offset & 0xf)
+                }
+                _ => unimplemented(),
+            },
+            0x0b => match offset {
+                // CLK MODE
+                0 => {
+                    let div = 7 - self.cpu_clk_div;
 
-                        // Reply that the clock is ready (locked?)
-                        0x10 | div as u32
-                    }
-                    0x800000...0x80000c => self.rtc.load::<A>(offset & 0xf),
-                    _ => unimplemented(),
-                },
-            0x0c =>
-                match offset {
-                    0x800000 => self.irda.load::<A>(0),
-                    0x800004 => self.irda.load::<A>(4),
-                    _ => unimplemented(),
-                },
-            0x0d =>
-                match offset {
-                    0...0x1ff => self.lcd.load::<A>(offset),
-                    0x800000 => self.iop_ctrl as u32,
-                    // XXX Figure out what this register is exactly
-                    0x800004 => 0,
-                    // XXX Figure out what this register is exactly
-                    0x80000c => 0,
-                    0x800010 => self.dac.load::<A>(0),
-                    0x800014 => self.dac.load::<A>(4),
-                    // XXX BATT CTRL
-                    0x800020 => 0,
-                    _ => unimplemented(),
-                },
+                    // Reply that the clock is ready (locked?)
+                    0x10 | div as u32
+                }
+                0x800000..=0x80000c => self.rtc.load::<A>(offset & 0xf),
+                _ => unimplemented(),
+            },
+            0x0c => match offset {
+                0x800000 => self.irda.load::<A>(0),
+                0x800004 => self.irda.load::<A>(4),
+                _ => unimplemented(),
+            },
+            0x0d => match offset {
+                0..=0x1ff => self.lcd.load::<A>(offset),
+                0x800000 => self.iop_ctrl as u32,
+                // XXX Figure out what this register is exactly
+                0x800004 => 0,
+                // XXX Figure out what this register is exactly
+                0x80000c => 0,
+                0x800010 => self.dac.load::<A>(0),
+                0x800014 => self.dac.load::<A>(4),
+                // XXX BATT CTRL
+                0x800020 => 0,
+                _ => unimplemented(),
+            },
             _ => unimplemented(),
         }
     }
@@ -185,18 +181,17 @@ impl Interconnect {
         let offset = addr & 0xffffff;
 
         if (addr & (A::size() as u32 - 1)) != 0 {
-            panic!("Missaligned {}bit store at 0x{:08x}",
-                   A::size() * 8, addr);
+            panic!("Missaligned {}bit store at 0x{:08x}", A::size() * 8, addr);
         }
 
-        let unimplemented =
-            || panic!("unhandled store address 0x{:08x}", addr);
+        let unimplemented = || panic!("unhandled store address 0x{:08x}", addr);
 
         match region {
-            0x00 =>
+            0x00 => {
                 if !self.flash.bios_at_0() {
                     self.ram.store::<A>(offset, val);
-                },
+                }
+            }
             0x06 => self.flash.store_config::<A>(offset, val),
             0x08 => {
                 match offset {
@@ -207,54 +202,48 @@ impl Interconnect {
                     _ => self.flash.store_raw::<A>(offset, val),
                 }
             }
-            0x0a =>
-                match offset {
-                    0x00...0x10 => self.irq_controller.store::<A>(offset, val),
-                    0x800000...0x800028 => {
-                        let timer = (offset >> 4) & 3;
+            0x0a => match offset {
+                0x00..=0x10 => self.irq_controller.store::<A>(offset, val),
+                0x800000..=0x800028 => {
+                    let timer = (offset >> 4) & 3;
 
-                        self.timers[timer as usize].store::<A>(offset & 0xf,
-                                                               val);
-                    }
-                    _ => unimplemented(),
-                },
-            0x0b =>
-                match offset {
-                    // XXX by looking at the kernel code it seems that
-                    // values greater than 8 are possible but treated
-                    // like 8. I need to run some tests on the real
-                    // hardware to make sure.
-                    0 => self.cpu_clk_div = 7 - (val & 0x7) as u8,
-                    0x800000...0x80000c => self.rtc.store::<A>(offset & 0xf,
-                                                               val),
-                    _ => unimplemented(),
-                },
-            0x0c =>
-                match offset {
-                    0x00 => println!("COM MODE 0x{:08x}", val),
-                    0x08 => println!("COM DATA 0x{:08x}", val),
-                    0x10 => println!("COM CTRL1 0x{:08x}", val),
-                    0x18 => println!("COM CTRL2 0x{:08x}", val),
-                    0x800000 => self.irda.store::<A>(0, val),
-                    0x800004 => self.irda.store::<A>(4, val),
-                    _ => unimplemented(),
-                },
-            0x0d =>
-                match offset {
-                    0...0x1ff => self.lcd.store::<A>(offset, val),
-                    0x800000 => {
-                        println!("IOP CTRL 0x{:08x}", val);
-                        self.iop_ctrl = val as u8;
-                    }
-                    0x800004 => println!("IOP STOP 0x{:08x}", val),
-                    0x800008 => println!("IOP START 0x{:08x}", val),
-                    0x800010 => self.dac.store::<A>(0, val),
-                    0x800014 => self.dac.store::<A>(4, val),
-                    0x800020 => println!("BATT CTRL 0x{:08x}", val),
-                    _ => unimplemented(),
-                },
+                    self.timers[timer as usize].store::<A>(offset & 0xf, val);
+                }
+                _ => unimplemented(),
+            },
+            0x0b => match offset {
+                // XXX by looking at the kernel code it seems that
+                // values greater than 8 are possible but treated
+                // like 8. I need to run some tests on the real
+                // hardware to make sure.
+                0 => self.cpu_clk_div = 7 - (val & 0x7) as u8,
+                0x800000..=0x80000c => self.rtc.store::<A>(offset & 0xf, val),
+                _ => unimplemented(),
+            },
+            0x0c => match offset {
+                0x00 => println!("COM MODE 0x{:08x}", val),
+                0x08 => println!("COM DATA 0x{:08x}", val),
+                0x10 => println!("COM CTRL1 0x{:08x}", val),
+                0x18 => println!("COM CTRL2 0x{:08x}", val),
+                0x800000 => self.irda.store::<A>(0, val),
+                0x800004 => self.irda.store::<A>(4, val),
+                _ => unimplemented(),
+            },
+            0x0d => match offset {
+                0..=0x1ff => self.lcd.store::<A>(offset, val),
+                0x800000 => {
+                    println!("IOP CTRL 0x{:08x}", val);
+                    self.iop_ctrl = val as u8;
+                }
+                0x800004 => println!("IOP STOP 0x{:08x}", val),
+                0x800008 => println!("IOP START 0x{:08x}", val),
+                0x800010 => self.dac.store::<A>(0, val),
+                0x800014 => self.dac.store::<A>(4, val),
+                0x800020 => println!("BATT CTRL 0x{:08x}", val),
+                _ => unimplemented(),
+            },
             _ => unimplemented(),
-            }
+        }
     }
 }
 

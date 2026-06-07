@@ -1,6 +1,6 @@
 use std::fmt;
 
-use interrupt::{IrqController, Interrupt};
+use interrupt::{Interrupt, IrqController};
 use memory::Addressable;
 
 use MASTER_CLOCK_HZ;
@@ -35,6 +35,12 @@ pub struct Rtc {
     skip: bool,
 }
 
+impl Default for Rtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Rtc {
     pub fn new() -> Rtc {
         Rtc {
@@ -52,10 +58,7 @@ impl Rtc {
         }
     }
 
-    pub fn tick(&mut self,
-                irq: &mut IrqController,
-                mut master_ticks: u32) {
-
+    pub fn tick(&mut self, irq: &mut IrqController, mut master_ticks: u32) {
         while master_ticks > 0 {
             if self.divider >= master_ticks {
                 self.divider -= master_ticks;
@@ -69,7 +72,7 @@ impl Rtc {
                 // We exhausted the divider, toggle the RTC signal
                 let level = !irq.raw_interrupt(Interrupt::Rtc);
 
-                if level == true {
+                if level {
                     // XXX Not sure how the paused bit is handled
                     if !self.paused {
                         self.second_elapsed();
@@ -125,7 +128,7 @@ impl Rtc {
     pub fn set_week_day(&mut self, bcd: Bcd) {
         let v = bcd.bcd();
 
-        assert!(v >= 0x01 && v <= 0x07);
+        assert!((0x01..=0x07).contains(&v));
 
         self.week_day = bcd;
     }
@@ -133,7 +136,7 @@ impl Rtc {
     pub fn set_day(&mut self, bcd: Bcd) {
         let v = bcd.bcd();
 
-        assert!(v >= 0x01 && v <= 0x31);
+        assert!((0x01..=0x31).contains(&v));
 
         self.day = bcd;
     }
@@ -141,7 +144,7 @@ impl Rtc {
     pub fn set_month(&mut self, bcd: Bcd) {
         let v = bcd.bcd();
 
-        assert!(v >= 0x01 && v <= 0x12);
+        assert!((0x01..=0x12).contains(&v));
 
         self.month = bcd;
     }
@@ -184,30 +187,27 @@ impl Rtc {
         // I don't understand how that register works, I just reset it
         // to the default value for now so that it doesn't lock up in
         // the reset sequence
-        let (counter, min, max) =
-            match self.adjust {
-                0 => (&mut self.seconds, 0x00, 0x59),
-                1 => (&mut self.minutes, 0x00, 0x59),
-                2 => (&mut self.hours, 0x00, 0x23),
-                3 => (&mut self.week_day, 0x01, 0x07),
-                4 => (&mut self.day, 0x01, 0x31),
-                5 => (&mut self.month, 0x01, 0x31),
-                6 => (&mut self.year, 0x00, 0x99),
-                _ => panic!("Unsupported adjust {:x}", self.adjust),
-            };
+        let (counter, min, max) = match self.adjust {
+            0 => (&mut self.seconds, 0x00, 0x59),
+            1 => (&mut self.minutes, 0x00, 0x59),
+            2 => (&mut self.hours, 0x00, 0x23),
+            3 => (&mut self.week_day, 0x01, 0x07),
+            4 => (&mut self.day, 0x01, 0x31),
+            5 => (&mut self.month, 0x01, 0x31),
+            6 => (&mut self.year, 0x00, 0x99),
+            _ => panic!("Unsupported adjust {:x}", self.adjust),
+        };
 
-        *counter =
-            if counter.bcd() < max {
-                counter.next().unwrap()
-            } else {
-                Bcd::from_bcd(min).unwrap()
-            };
+        *counter = if counter.bcd() < max {
+            counter.next().unwrap()
+        } else {
+            Bcd::from_bcd(min).unwrap()
+        };
 
         self.skip = true;
     }
 
     fn second_elapsed(&mut self) {
-
         let inc_overflow = |bcd: &mut Bcd, max| {
             if bcd.bcd() < max {
                 *bcd = bcd.next().unwrap();
@@ -220,12 +220,11 @@ impl Rtc {
             }
         };
 
-        if inc_overflow(&mut self.seconds, 0x59) {
-            if inc_overflow(&mut self.minutes, 0x59) {
-                if inc_overflow(&mut self.hours, 0x23) {
-                    self.day_elapsed();
-                }
-            }
+        if inc_overflow(&mut self.seconds, 0x59)
+            && inc_overflow(&mut self.minutes, 0x59)
+            && inc_overflow(&mut self.hours, 0x23)
+        {
+            self.day_elapsed();
         }
     }
 
@@ -244,49 +243,46 @@ impl Rtc {
 
         inc_overflow(&mut self.week_day, 0x07, 0x01);
 
-        let days_in_month =
-            match self.month.bcd() {
-                0x01 => 0x31,
-                // XXX The RTC doesn't store the century, so it's
-                // probably not able to handle leap years at all? Does
-                // the BIOS handle it?
-                0x02 => 0x28,
-                0x03 => 0x31,
-                0x04 => 0x30,
-                0x05 => 0x31,
-                0x06 => 0x30,
-                0x07 => 0x31,
-                0x08 => 0x31,
-                0x09 => 0x30,
-                0x10 => 0x31,
-                0x11 => 0x30,
-                0x12 => 0x31,
-                _ => unreachable!(),
-            };
+        let days_in_month = match self.month.bcd() {
+            0x01 => 0x31,
+            // XXX The RTC doesn't store the century, so it's
+            // probably not able to handle leap years at all? Does
+            // the BIOS handle it?
+            0x02 => 0x28,
+            0x03 => 0x31,
+            0x04 => 0x30,
+            0x05 => 0x31,
+            0x06 => 0x30,
+            0x07 => 0x31,
+            0x08 => 0x31,
+            0x09 => 0x30,
+            0x10 => 0x31,
+            0x11 => 0x30,
+            0x12 => 0x31,
+            _ => unreachable!(),
+        };
 
-        if inc_overflow(&mut self.day, days_in_month, 0x01) {
-            if inc_overflow(&mut self.month, 0x12, 0x01) {
-                inc_overflow(&mut self.year, 0x99, 0x00);
-            }
+        if inc_overflow(&mut self.day, days_in_month, 0x01)
+            && inc_overflow(&mut self.month, 0x12, 0x01)
+        {
+            inc_overflow(&mut self.year, 0x99, 0x00);
         }
     }
 }
 
 impl fmt::Debug for Rtc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}.{}.{} {}:{}:{}",
-               self.year, self.month, self.day,
-               self.hours,
-               self.minutes,
-               self.seconds)
+        write!(
+            f,
+            "{}.{}.{} {}:{}:{}",
+            self.year, self.month, self.day, self.hours, self.minutes, self.seconds
+        )
     }
 }
 
-
 /// A single packed BCD value in the range 0-99 (2 digits, 4bits per
 /// digit).
-#[derive(serde::Serialize, serde::Deserialize)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Bcd(u8);
 
 impl Bcd {

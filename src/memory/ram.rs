@@ -1,4 +1,3 @@
-use rustc_serialize::{Decodable, Encodable, Decoder, Encoder};
 use crate::box_array::BoxArray;
 
 use super::Addressable;
@@ -6,6 +5,12 @@ use super::Addressable;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Ram {
     data: BoxArray<u8, RAM_SIZE>,
+}
+
+impl Default for Ram {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Ram {

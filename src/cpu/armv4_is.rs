@@ -2,13 +2,15 @@
 
 use std::fmt;
 
-use memory::{Word, HalfWord, Byte};
 use debugger::Debugger;
+use memory::{Byte, HalfWord, Word};
 
 use super::{Cpu, RegisterIndex};
 
 pub fn execute<D>(cpu: &mut Cpu, debugger: &mut D, instruction: u32)
-    where D: Debugger {
+where
+    D: Debugger,
+{
     let instruction = Instruction(instruction);
 
     instruction.execute(debugger, cpu);
@@ -68,8 +70,9 @@ impl Instruction {
 
     /// Execute this instruction
     fn execute<D>(self, debugger: &mut D, cpu: &mut Cpu)
-        where D: Debugger {
-
+    where
+        D: Debugger,
+    {
         let n = cpu.n();
         let z = cpu.z();
         let c = cpu.c();
@@ -78,42 +81,41 @@ impl Instruction {
         // All ARM instructions have a 4bit "condition" code which can
         // be used to conditionally execute an instruction without
         // having to use a branch
-        let cond_true =
-            match self.condition_code() {
-                // Equal (EQ)
-                0b0000 => z,
-                // Not equal (NE)
-                0b0001 => !z,
-                // Unsigned higher, or same (CS)
-                0b0010 => c,
-                // Unsigned lower (CC)
-                0b0011 => !c,
-                // Negative (MI)
-                0b0100 => n,
-                // Positive, or 0 (PL)
-                0b0101 => !n,
-                // Overflow (VS)
-                0b0110 => v,
-                // No overflow (VC)
-                0b0111 => !v,
-                // Unsigned higher (HI)
-                0b1000 => c && !z,
-                // Unsigned lower, or same (LS)
-                0b1001 => !c || z,
-                // Greater, or equal (GE)
-                0b1010 => n == v,
-                // Less than (LT)
-                0b1011 => n != v,
-                // Greater than (GT)
-                0b1100 => !z && (n == v),
-                // Less than, or equal (LE)
-                0b1101 => z || (n != v),
-                // Always (AL)
-                0b1110 => true,
-                // This condition code is "unpredictable".
-                0b1111 => panic!("Unexpected ARM condition 0b1111"),
-                _ => unreachable!(),
-            };
+        let cond_true = match self.condition_code() {
+            // Equal (EQ)
+            0b0000 => z,
+            // Not equal (NE)
+            0b0001 => !z,
+            // Unsigned higher, or same (CS)
+            0b0010 => c,
+            // Unsigned lower (CC)
+            0b0011 => !c,
+            // Negative (MI)
+            0b0100 => n,
+            // Positive, or 0 (PL)
+            0b0101 => !n,
+            // Overflow (VS)
+            0b0110 => v,
+            // No overflow (VC)
+            0b0111 => !v,
+            // Unsigned higher (HI)
+            0b1000 => c && !z,
+            // Unsigned lower, or same (LS)
+            0b1001 => !c || z,
+            // Greater, or equal (GE)
+            0b1010 => n == v,
+            // Less than (LT)
+            0b1011 => n != v,
+            // Greater than (GT)
+            0b1100 => !z && (n == v),
+            // Less than, or equal (LE)
+            0b1101 => z || (n != v),
+            // Always (AL)
+            0b1110 => true,
+            // This condition code is "unpredictable".
+            0b1111 => panic!("Unexpected ARM condition 0b1111"),
+            _ => unreachable!(),
+        };
 
         if cond_true {
             self.decode_and_execute(debugger, cpu);
@@ -121,7 +123,9 @@ impl Instruction {
     }
 
     fn decode_and_execute<D>(self, debugger: &mut D, cpu: &mut Cpu)
-        where D: Debugger {
+    where
+        D: Debugger,
+    {
         let handler = OPCODE_LUT[self.opcode() as usize];
 
         handler(self, debugger, cpu);
@@ -177,9 +181,7 @@ impl Mode1Addressing for Mode1Imm {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 1
+        ((i >> 20) & 1) == s as u32 && ((i >> 21) & 0xf) == opcode && ((i >> 25) & 7) == 1
     }
 }
 
@@ -188,16 +190,16 @@ struct Mode1LslImm;
 impl Mode1Addressing for Mode1LslImm {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let val = cpu.reg(rm);
 
         val << shift
     }
 
     fn value_carry(instruction: Instruction, cpu: &Cpu) -> (u32, bool) {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let val = cpu.reg(rm);
 
         match shift {
             0 => (val, cpu.c()),
@@ -212,10 +214,10 @@ impl Mode1Addressing for Mode1LslImm {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 7) == 0
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 7) == 0
     }
 }
 
@@ -224,20 +226,20 @@ struct Mode1LsrImm;
 impl Mode1Addressing for Mode1LsrImm {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let val = cpu.reg(rm);
 
         match shift {
             // Shift 0 means shift by 32
             0 => 0,
-            _ => val >> shift
+            _ => val >> shift,
         }
     }
 
     fn value_carry(instruction: Instruction, cpu: &Cpu) -> (u32, bool) {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let val = cpu.reg(rm);
 
         match shift {
             // Shift 0 means shift by 32
@@ -253,10 +255,10 @@ impl Mode1Addressing for Mode1LsrImm {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 7) == 0b010
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 7) == 0b010
     }
 }
 
@@ -264,9 +266,9 @@ struct Mode1LslReg;
 
 impl Mode1Addressing for Mode1LslReg {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
-        let rm    = instruction.rm();
-        let rs    = instruction.rs();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let rs = instruction.rs();
+        let val = cpu.reg(rm);
         let shift = cpu.reg(rs) & 0xff;
 
         match shift {
@@ -282,10 +284,10 @@ impl Mode1Addressing for Mode1LslReg {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 0xf) == 0b0001
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 0xf) == 0b0001
     }
 }
 
@@ -293,9 +295,9 @@ struct Mode1LsrReg;
 
 impl Mode1Addressing for Mode1LsrReg {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
-        let rm    = instruction.rm();
-        let rs    = instruction.rs();
-        let val   = cpu.reg(rm);
+        let rm = instruction.rm();
+        let rs = instruction.rs();
+        let val = cpu.reg(rm);
         let shift = cpu.reg(rs) & 0xff;
 
         match shift {
@@ -311,10 +313,10 @@ impl Mode1Addressing for Mode1LsrReg {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 0xf) == 0b0011
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 0xf) == 0b0011
     }
 }
 
@@ -323,34 +325,32 @@ struct Mode1AsrImm;
 impl Mode1Addressing for Mode1AsrImm {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm) as i32;
+        let rm = instruction.rm();
+        let val = cpu.reg(rm) as i32;
 
-        let val =
-            match shift {
-                // Shift 0 means shift by 32, which is like shifting
-                // by 31 when using a signed value (i.e. the sign bit
-                // is replicated all over the 32bits)
-                0 => val >> 31,
-                _ => val >> shift
-            };
+        let val = match shift {
+            // Shift 0 means shift by 32, which is like shifting
+            // by 31 when using a signed value (i.e. the sign bit
+            // is replicated all over the 32bits)
+            0 => val >> 31,
+            _ => val >> shift,
+        };
 
         val as u32
     }
 
     fn value_carry(instruction: Instruction, cpu: &Cpu) -> (u32, bool) {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
-        let val   = cpu.reg(rm) as i32;
+        let rm = instruction.rm();
+        let val = cpu.reg(rm) as i32;
 
-        let (val, c) =
-            match shift {
-                // Shift 0 means shift by 32, which is like shifting
-                // by 31 when using a signed value (i.e. the sign bit
-                // is replicated all over the 32bits)
-                0 => (val >> 31, val < 0),
-                _ => (val >> shift, (val >> (shift - 1)) & 1 != 0),
-            };
+        let (val, c) = match shift {
+            // Shift 0 means shift by 32, which is like shifting
+            // by 31 when using a signed value (i.e. the sign bit
+            // is replicated all over the 32bits)
+            0 => (val >> 31, val < 0),
+            _ => (val >> shift, (val >> (shift - 1)) & 1 != 0),
+        };
 
         (val as u32, c)
     }
@@ -358,10 +358,10 @@ impl Mode1Addressing for Mode1AsrImm {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 7) == 0b100
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 7) == 0b100
     }
 }
 
@@ -369,19 +369,18 @@ struct Mode1AsrReg;
 
 impl Mode1Addressing for Mode1AsrReg {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
-        let rm    = instruction.rm();
-        let rs    = instruction.rs();
-        let val   = cpu.reg(rm) as i32;
+        let rm = instruction.rm();
+        let rs = instruction.rs();
+        let val = cpu.reg(rm) as i32;
         let shift = cpu.reg(rs) & 0xff;
 
-        let r =
-            match shift {
-                0..=31 => val >> shift,
-                // Shift by more than 31 is like shifting by 31 when
-                // using a signed value (i.e. the sign bit is
-                // replicated all over the 32bits)
-                _ => val >> 31,
-            };
+        let r = match shift {
+            0..=31 => val >> shift,
+            // Shift by more than 31 is like shifting by 31 when
+            // using a signed value (i.e. the sign bit is
+            // replicated all over the 32bits)
+            _ => val >> 31,
+        };
 
         r as u32
     }
@@ -393,10 +392,10 @@ impl Mode1Addressing for Mode1AsrReg {
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 0xf) == 0b0101
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 0xf) == 0b0101
     }
 }
 
@@ -406,7 +405,7 @@ struct Mode1RorImm;
 impl Mode1Addressing for Mode1RorImm {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
+        let rm = instruction.rm();
 
         let val = cpu.reg(rm);
 
@@ -422,7 +421,7 @@ impl Mode1Addressing for Mode1RorImm {
 
     fn value_carry(instruction: Instruction, cpu: &Cpu) -> (u32, bool) {
         let shift = (instruction.0 >> 7) & 0x1f;
-        let rm    = instruction.rm();
+        let rm = instruction.rm();
 
         let val = cpu.reg(rm);
 
@@ -434,18 +433,17 @@ impl Mode1Addressing for Mode1RorImm {
 
             (r, (r & 1) != 0)
         } else {
-            (val.rotate_right(shift),
-             ((val >> (shift - 1)) & 1) != 0)
+            (val.rotate_right(shift), ((val >> (shift - 1)) & 1) != 0)
         }
     }
 
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 25) & 7) == 0 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 20) & 1) == s as u32 &&
-            ((i >> 4) & 7) == 0b110
+        ((i >> 25) & 7) == 0
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 20) & 1) == s as u32
+            && ((i >> 4) & 7) == 0b110
     }
 }
 
@@ -453,20 +451,20 @@ struct Mode1RorReg;
 
 impl Mode1Addressing for Mode1RorReg {
     fn value(instruction: Instruction, cpu: &Cpu) -> u32 {
-        let rm    = instruction.rm();
-        let rs    = instruction.rs();
+        let rm = instruction.rm();
+        let rs = instruction.rs();
 
-        let val   = cpu.reg(rm);
+        let val = cpu.reg(rm);
         let shift = cpu.reg(rs) & 0x1f;
 
         val.rotate_right(shift)
     }
 
     fn value_carry(instruction: Instruction, cpu: &Cpu) -> (u32, bool) {
-        let rm    = instruction.rm();
-        let rs    = instruction.rs();
+        let rm = instruction.rm();
+        let rs = instruction.rs();
 
-        let val   = cpu.reg(rm);
+        let val = cpu.reg(rm);
         let shift = cpu.reg(rs) & 0xff;
 
         if shift == 0 {
@@ -476,33 +474,36 @@ impl Mode1Addressing for Mode1RorReg {
         } else {
             let shift = shift & 0x1f;
 
-            (val.rotate_right(shift),
-             ((val >> (shift - 1)) & 1) != 0)
+            (val.rotate_right(shift), ((val >> (shift - 1)) & 1) != 0)
         }
     }
 
     fn is_valid(instruction: Instruction, opcode: u32, s: bool) -> bool {
         let i = instruction.0;
 
-        ((i >> 20) & 1) == s as u32 &&
-            ((i >> 21) & 0xf) == opcode &&
-            ((i >> 25) & 7) == 0 &&
-            ((i >> 4) & 0xf) == 0b0111
+        ((i >> 20) & 1) == s as u32
+            && ((i >> 21) & 0xf) == opcode
+            && ((i >> 25) & 7) == 0
+            && ((i >> 4) & 0xf) == 0b0111
     }
 }
 
-fn unimplemented(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
-    panic!("Unimplemented instruction {} ({:03x})\n{:?}",
-           instruction,
-           instruction.opcode(),
-           cpu);
+fn unimplemented(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+    panic!(
+        "Unimplemented instruction {} ({:03x})\n{:?}",
+        instruction,
+        instruction.opcode(),
+        cpu
+    );
 }
 
-fn and<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn and<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b  = M::value(instruction, cpu);
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 0, false));
 
@@ -513,10 +514,12 @@ fn and<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn ands<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd     = instruction.rd();
-    let rn     = instruction.rn();
+fn ands<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 0, true));
@@ -536,11 +539,13 @@ fn ands<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn eor<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn eor<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b  = M::value(instruction, cpu);
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 1, false));
 
@@ -551,10 +556,12 @@ fn eor<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn eors<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd     = instruction.rd();
-    let rn     = instruction.rn();
+fn eors<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 1, true));
@@ -574,11 +581,13 @@ fn eors<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn sub<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn sub<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let dst = instruction.rd();
-    let rn  = instruction.rn();
-    let b   = M::value(instruction, cpu);
+    let rn = instruction.rn();
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 2, false));
 
@@ -589,11 +598,13 @@ fn sub<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(dst, val);
 }
 
-fn subs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd  = instruction.rd();
-    let rn  = instruction.rn();
-    let b   = M::value(instruction, cpu);
+fn subs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 2, true));
 
@@ -617,11 +628,13 @@ fn subs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn rsb<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn rsb<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let a  = M::value(instruction, cpu);
+    let a = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 3, false));
 
@@ -632,11 +645,13 @@ fn rsb<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn rsbs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn rsbs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let a  = M::value(instruction, cpu);
+    let a = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 3, true));
 
@@ -660,11 +675,13 @@ fn rsbs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn add<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn add<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b  = M::value(instruction, cpu);
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 4, false));
 
@@ -675,11 +692,13 @@ fn add<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn adds<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn adds<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b  = M::value(instruction, cpu);
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 4, true));
 
@@ -703,12 +722,14 @@ fn adds<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
 }
 
-fn adc<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn adc<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let dst = instruction.rd();
-    let rn  = instruction.rn();
-    let c   = cpu.c() as u32;
-    let b   = M::value(instruction, cpu);
+    let rn = instruction.rn();
+    let c = cpu.c() as u32;
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 5, false));
 
@@ -719,10 +740,12 @@ fn adc<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(dst, val);
 }
 
-fn tst<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rn     = instruction.rn();
-    let rd     = instruction.rd();
+fn tst<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rn = instruction.rn();
+    let rd = instruction.rd();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 8, true));
@@ -741,10 +764,12 @@ fn tst<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn teq<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rn     = instruction.rn();
-    let rd     = instruction.rd();
+fn teq<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rn = instruction.rn();
+    let rd = instruction.rd();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 9, true));
@@ -763,11 +788,13 @@ fn teq<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn cmp<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rn  = instruction.rn();
-    let rd  = instruction.rd();
-    let b   = M::value(instruction, cpu);
+fn cmp<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rn = instruction.rn();
+    let rd = instruction.rd();
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 10, true));
 
@@ -790,11 +817,13 @@ fn cmp<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn cmn<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rn  = instruction.rn();
-    let rd  = instruction.rd();
-    let b   = M::value(instruction, cpu);
+fn cmn<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rn = instruction.rn();
+    let rd = instruction.rd();
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 11, true));
 
@@ -817,11 +846,13 @@ fn cmn<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn orr<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn orr<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b  = M::value(instruction, cpu);
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 12, false));
 
@@ -832,10 +863,12 @@ fn orr<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn orrs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd     = instruction.rd();
-    let rn     = instruction.rn();
+fn orrs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 12, true));
@@ -855,10 +888,12 @@ fn orrs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn mov<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd  = instruction.rd();
-    let rn  = instruction.rn();
+fn mov<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
     let val = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 13, false));
@@ -871,9 +906,11 @@ fn mov<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn movs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd       = instruction.rd();
+fn movs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
     let (val, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 13, true));
@@ -889,11 +926,13 @@ fn movs<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn bic<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd  = instruction.rd();
-    let rn  = instruction.rn();
-    let b   = M::value(instruction, cpu);
+fn bic<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
+    let b = M::value(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 14, false));
 
@@ -904,10 +943,12 @@ fn bic<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val);
 }
 
-fn bics<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
-    let rd     = instruction.rd();
-    let rn     = instruction.rn();
+fn bics<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
+    let rd = instruction.rd();
+    let rn = instruction.rn();
     let (b, c) = M::value_carry(instruction, cpu);
 
     debug_assert!(M::is_valid(instruction, 14, true));
@@ -927,8 +968,10 @@ fn bics<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_c(c);
 }
 
-fn mvn<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode1Addressing {
+fn mvn<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode1Addressing,
+{
     let dst = instruction.rd();
     let rn = instruction.rn();
     let val = M::value(instruction, cpu);
@@ -943,12 +986,14 @@ fn mvn<M>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(dst, !val);
 }
 
-fn mul<S>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where S: ModeFlag {
-    let rm  = instruction.rm();
-    let rs  = instruction.rs();
+fn mul<S>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    S: ModeFlag,
+{
+    let rm = instruction.rm();
+    let rs = instruction.rs();
     // This instruction places Rd where Rn usually is
-    let rd  = instruction.rn();
+    let rd = instruction.rn();
 
     if rd.is_pc() || rm.is_pc() || rs.is_pc() {
         panic!("Unpredictable MUL");
@@ -965,19 +1010,24 @@ fn mul<S>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
     }
 }
 
-fn mla<S>(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu)
-    where S: ModeFlag {
-    let rm  = instruction.rm();
-    let rs  = instruction.rs();
+fn mla<S>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    S: ModeFlag,
+{
+    let rm = instruction.rm();
+    let rs = instruction.rs();
     // This instruction switches Rd and Rn
-    let rd  = instruction.rn();
-    let rn  = instruction.rd();
+    let rd = instruction.rn();
+    let rn = instruction.rd();
 
     if rd.is_pc() || rm.is_pc() || rs.is_pc() || rn.is_pc() {
         panic!("Unpredictable MLA");
     }
 
-    let val = cpu.reg(rm).wrapping_mul(cpu.reg(rs)).wrapping_add(cpu.reg(rn));
+    let val = cpu
+        .reg(rm)
+        .wrapping_mul(cpu.reg(rs))
+        .wrapping_add(cpu.reg(rn));
 
     cpu.set_reg(rd, val);
 
@@ -1019,20 +1069,24 @@ impl ModeFlag for Clear {
 trait Mode2Addressing {
     /// Decode the address and update the registers
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag;
+    where
+        U: ModeFlag;
 
     /// Used to validate that the addressing mode matches the
     /// instruction (useful for debugging).
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag;
+    where
+        U: ModeFlag;
 }
 
 struct Mode2Imm;
 
 impl Mode2Addressing for Mode2Imm {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
-        let rn     = instruction.rn();
+    where
+        U: ModeFlag,
+    {
+        let rn = instruction.rn();
         let offset = instruction.0 & 0xfff;
 
         let base = cpu.reg(rn);
@@ -1045,13 +1099,15 @@ impl Mode2Addressing for Mode2Imm {
     }
 
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0101 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 22) & 1) == byte as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32
+        ((i >> 24) & 0xf) == 0b0101
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 22) & 1) == byte as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
     }
 }
 
@@ -1059,9 +1115,11 @@ struct Mode2ImmPre;
 
 impl Mode2Addressing for Mode2ImmPre {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
-        let rd     = instruction.rd();
-        let rn     = instruction.rn();
+    where
+        U: ModeFlag,
+    {
+        let rd = instruction.rd();
+        let rn = instruction.rn();
         let offset = instruction.0 & 0xfff;
 
         if rn.is_pc() {
@@ -1076,12 +1134,11 @@ impl Mode2Addressing for Mode2ImmPre {
 
         let base = cpu.reg(rn);
 
-        let addr =
-            if U::is_set() {
-                base.wrapping_add(offset)
-            } else {
-                base.wrapping_sub(offset)
-            };
+        let addr = if U::is_set() {
+            base.wrapping_add(offset)
+        } else {
+            base.wrapping_sub(offset)
+        };
 
         // Pre index
         cpu.set_reg(rn, addr);
@@ -1090,13 +1147,15 @@ impl Mode2Addressing for Mode2ImmPre {
     }
 
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0101 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 22) & 1) == byte as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32
+        ((i >> 24) & 0xf) == 0b0101
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 22) & 1) == byte as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
     }
 }
 
@@ -1104,9 +1163,11 @@ struct Mode2ImmPost;
 
 impl Mode2Addressing for Mode2ImmPost {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
-        let rd     = instruction.rd();
-        let rn     = instruction.rn();
+    where
+        U: ModeFlag,
+    {
+        let rd = instruction.rd();
+        let rn = instruction.rn();
         let offset = instruction.0 & 0xfff;
 
         if rn.is_pc() {
@@ -1121,12 +1182,11 @@ impl Mode2Addressing for Mode2ImmPost {
 
         let base = cpu.reg(rn);
 
-        let addr =
-            if U::is_set() {
-                base.wrapping_add(offset)
-            } else {
-                base.wrapping_sub(offset)
-            };
+        let addr = if U::is_set() {
+            base.wrapping_add(offset)
+        } else {
+            base.wrapping_sub(offset)
+        };
 
         // Post index
         cpu.set_reg(rn, addr);
@@ -1135,13 +1195,15 @@ impl Mode2Addressing for Mode2ImmPost {
     }
 
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0100 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 22) & 1) == byte as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32
+        ((i >> 24) & 0xf) == 0b0100
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 22) & 1) == byte as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
     }
 }
 
@@ -1149,9 +1211,11 @@ struct Mode2LslReg;
 
 impl Mode2Addressing for Mode2LslReg {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
-        let rn    = instruction.rn();
-        let rm    = instruction.rm();
+    where
+        U: ModeFlag,
+    {
+        let rn = instruction.rn();
+        let rm = instruction.rm();
         let shift = (instruction.0 >> 7) & 0x1f;
 
         let offset = cpu.reg(rm) << shift;
@@ -1166,15 +1230,17 @@ impl Mode2Addressing for Mode2LslReg {
     }
 
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0111 &&
-            ((i >> 21) & 1) == 0 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 22) & 1) == byte as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 4) & 7) == 0
+        ((i >> 24) & 0xf) == 0b0111
+            && ((i >> 21) & 1) == 0
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 22) & 1) == byte as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 4) & 7) == 0
     }
 }
 
@@ -1182,21 +1248,22 @@ struct Mode2LslRegPre;
 
 impl Mode2Addressing for Mode2LslRegPre {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
-        let rn    = instruction.rn();
-        let rm    = instruction.rm();
+    where
+        U: ModeFlag,
+    {
+        let rn = instruction.rn();
+        let rm = instruction.rm();
         let shift = (instruction.0 >> 7) & 0x1f;
 
         let offset = cpu.reg(rm) << shift;
 
         let base = cpu.reg(rn);
 
-        let addr =
-            if U::is_set() {
-                base.wrapping_add(offset)
-            } else {
-                base.wrapping_sub(offset)
-            };
+        let addr = if U::is_set() {
+            base.wrapping_add(offset)
+        } else {
+            base.wrapping_sub(offset)
+        };
 
         cpu.set_reg(rn, addr);
 
@@ -1204,21 +1271,26 @@ impl Mode2Addressing for Mode2LslRegPre {
     }
 
     fn is_valid<U>(instruction: Instruction, load: bool, byte: bool) -> bool
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0111 &&
-            ((i >> 21) & 1) == 1 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 22) & 1) == byte as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 4) & 7) == 0
+        ((i >> 24) & 0xf) == 0b0111
+            && ((i >> 21) & 1) == 1
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 22) & 1) == byte as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 4) & 7) == 0
     }
 }
 
-fn ldr<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode2Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn ldr<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode2Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false));
@@ -1233,9 +1305,12 @@ fn ldr<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg_pc_mask(rd, val);
 }
 
-fn str<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode2Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn str<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode2Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, false));
@@ -1250,21 +1325,27 @@ fn str<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
     cpu.store::<Word>(debugger, addr, val);
 }
 
-fn ldrb<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode2Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn ldrb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode2Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, true));
 
     let val = cpu.load::<Byte>(debugger, addr);
 
-    cpu.set_reg_pc_mask(rd, val as u32);
+    cpu.set_reg_pc_mask(rd, val);
 }
 
-fn strb<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode2Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn strb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode2Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, true));
@@ -1284,22 +1365,23 @@ fn strb<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
 trait Mode3Addressing {
     /// Decode the address and update the registers
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag;
+    where
+        U: ModeFlag;
 
     /// Used to validate that the addressing mode matches the
     /// instruction (useful for debugging).
-    fn is_valid<U>(instruction: Instruction,
-                   load: bool,
-                   byte: bool,
-                   signed: bool) -> bool
-        where U: ModeFlag;
+    fn is_valid<U>(instruction: Instruction, load: bool, byte: bool, signed: bool) -> bool
+    where
+        U: ModeFlag;
 }
 
 struct Mode3Imm;
 
 impl Mode3Addressing for Mode3Imm {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let rn = instruction.rn();
         let hi = (instruction.0 >> 8) & 0xf;
         let lo = instruction.0 & 0xf;
@@ -1315,21 +1397,20 @@ impl Mode3Addressing for Mode3Imm {
         }
     }
 
-    fn is_valid<U>(instruction: Instruction,
-                   load: bool,
-                   byte: bool,
-                   signed: bool) -> bool
-        where U: ModeFlag {
+    fn is_valid<U>(instruction: Instruction, load: bool, byte: bool, signed: bool) -> bool
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0001 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 21) & 3) == 2 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 7) & 1) == 1 &&
-            ((i >> 6) & 1) == signed as u32 &&
-            ((i >> 5) & 1) == (!byte) as u32 &&
-            ((i >> 4) & 1) == 1
+        ((i >> 24) & 0xf) == 0b0001
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 21) & 3) == 2
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 7) & 1) == 1
+            && ((i >> 6) & 1) == signed as u32
+            && ((i >> 5) & 1) == (!byte) as u32
+            && ((i >> 4) & 1) == 1
     }
 }
 
@@ -1337,7 +1418,9 @@ struct Mode3ImmPre;
 
 impl Mode3Addressing for Mode3ImmPre {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let rn = instruction.rn();
         let rd = instruction.rd();
         let hi = (instruction.0 >> 8) & 0xf;
@@ -1352,33 +1435,31 @@ impl Mode3Addressing for Mode3ImmPre {
 
         let base = cpu.reg(rn);
 
-        let addr =
-            if U::is_set() {
-                base.wrapping_add(offset)
-            } else {
-                base.wrapping_sub(offset)
-            };
+        let addr = if U::is_set() {
+            base.wrapping_add(offset)
+        } else {
+            base.wrapping_sub(offset)
+        };
 
         cpu.set_reg(rn, addr);
 
         addr
     }
 
-    fn is_valid<U>(instruction: Instruction,
-                   load: bool,
-                   byte: bool,
-                   signed: bool) -> bool
-        where U: ModeFlag {
+    fn is_valid<U>(instruction: Instruction, load: bool, byte: bool, signed: bool) -> bool
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0001 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 21) & 3) == 3 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 7) & 1) == 1 &&
-            ((i >> 6) & 1) == signed as u32 &&
-            ((i >> 5) & 1) == (!byte) as u32 &&
-            ((i >> 4) & 1) == 1
+        ((i >> 24) & 0xf) == 0b0001
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 21) & 3) == 3
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 7) & 1) == 1
+            && ((i >> 6) & 1) == signed as u32
+            && ((i >> 5) & 1) == (!byte) as u32
+            && ((i >> 4) & 1) == 1
     }
 }
 
@@ -1386,7 +1467,9 @@ struct Mode3ImmPost;
 
 impl Mode3Addressing for Mode3ImmPost {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let rn = instruction.rn();
         let rd = instruction.rd();
         let hi = (instruction.0 >> 8) & 0xf;
@@ -1401,33 +1484,31 @@ impl Mode3Addressing for Mode3ImmPost {
 
         let base = cpu.reg(rn);
 
-        let wb =
-            if U::is_set() {
-                base.wrapping_add(offset)
-            } else {
-                base.wrapping_sub(offset)
-            };
+        let wb = if U::is_set() {
+            base.wrapping_add(offset)
+        } else {
+            base.wrapping_sub(offset)
+        };
 
         cpu.set_reg(rn, wb);
 
         base
     }
 
-    fn is_valid<U>(instruction: Instruction,
-                   load: bool,
-                   byte: bool,
-                   signed: bool) -> bool
-        where U: ModeFlag {
+    fn is_valid<U>(instruction: Instruction, load: bool, byte: bool, signed: bool) -> bool
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0000 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 21) & 3) == 2 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 7) & 1) == 1 &&
-            ((i >> 6) & 1) == signed as u32 &&
-            ((i >> 5) & 1) == (!byte) as u32 &&
-            ((i >> 4) & 1) == 1
+        ((i >> 24) & 0xf) == 0b0000
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 21) & 3) == 2
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 7) & 1) == 1
+            && ((i >> 6) & 1) == signed as u32
+            && ((i >> 5) & 1) == (!byte) as u32
+            && ((i >> 4) & 1) == 1
     }
 }
 
@@ -1435,7 +1516,9 @@ struct Mode3Reg;
 
 impl Mode3Addressing for Mode3Reg {
     fn address<U>(instruction: Instruction, cpu: &mut Cpu) -> u32
-        where U: ModeFlag {
+    where
+        U: ModeFlag,
+    {
         let rn = instruction.rn();
         let rm = instruction.rm();
 
@@ -1449,39 +1532,44 @@ impl Mode3Addressing for Mode3Reg {
         }
     }
 
-    fn is_valid<U>(instruction: Instruction,
-                   load: bool,
-                   byte: bool,
-                   signed: bool) -> bool
-        where U: ModeFlag {
+    fn is_valid<U>(instruction: Instruction, load: bool, byte: bool, signed: bool) -> bool
+    where
+        U: ModeFlag,
+    {
         let i = instruction.0;
 
-        ((i >> 24) & 0xf) == 0b0001 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 21) & 3) == 0 &&
-            ((i >> 20) & 1) == load as u32 &&
-            ((i >> 7) & 0x1f) == 1 &&
-            ((i >> 6) & 1) == signed as u32 &&
-            ((i >> 5) & 1) == (!byte) as u32 &&
-            ((i >> 4) & 1) == 1
+        ((i >> 24) & 0xf) == 0b0001
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 21) & 3) == 0
+            && ((i >> 20) & 1) == load as u32
+            && ((i >> 7) & 0x1f) == 1
+            && ((i >> 6) & 1) == signed as u32
+            && ((i >> 5) & 1) == (!byte) as u32
+            && ((i >> 4) & 1) == 1
     }
 }
 
-fn ldrh<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode3Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn ldrh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode3Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false, false));
 
     let val = cpu.load::<HalfWord>(debugger, addr);
 
-    cpu.set_reg(rd, val as u32)
+    cpu.set_reg(rd, val)
 }
 
-fn ldrsh<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode3Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn ldrsh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode3Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false, true));
@@ -1491,9 +1579,12 @@ fn ldrsh<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
     cpu.set_reg(rd, val as u32)
 }
 
-fn strh<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode3Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn strh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode3Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, false, false));
@@ -1503,9 +1594,12 @@ fn strh<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
     cpu.store::<HalfWord>(debugger, addr, val);
 }
 
-fn ldrsb<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
-    where M: Mode3Addressing, U: ModeFlag {
-    let rd   = instruction.rd();
+fn ldrsb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    M: Mode3Addressing,
+    U: ModeFlag,
+{
+    let rd = instruction.rd();
     let addr = M::address::<U>(instruction, cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, true, true));
@@ -1517,38 +1611,36 @@ fn ldrsb<M, U>(instruction: Instruction, debugger: &mut Debugger, cpu: &mut Cpu)
 
 /// LDM/STM start address and WriteBack value
 fn mode4_start_wb<U, P>(base: u32, list: u32) -> (u32, u32)
-    where U: ModeFlag, P: ModeFlag {
+where
+    U: ModeFlag,
+    P: ModeFlag,
+{
     let list_len = list.count_ones();
 
     let len_bytes = list_len * 4;
 
     if U::is_set() {
-        let start_addr =
-            if P::is_set() {
-                base + 4
-            } else {
-                base
-            };
+        let start_addr = if P::is_set() { base + 4 } else { base };
 
         (start_addr, base.wrapping_add(len_bytes))
     } else {
-        let start_addr =
-            if P::is_set() {
-                base.wrapping_sub(len_bytes)
-            } else {
-                base.wrapping_sub(len_bytes) + 4
-            };
+        let start_addr = if P::is_set() {
+            base.wrapping_sub(len_bytes)
+        } else {
+            base.wrapping_sub(len_bytes) + 4
+        };
 
         (start_addr, base.wrapping_sub(len_bytes))
     }
 }
 
-fn ldm<U, P, W>(instruction: Instruction,
-                debugger: &mut Debugger,
-                cpu: &mut Cpu)
-    where U: ModeFlag, P: ModeFlag, W: ModeFlag {
-
-    let rn   = instruction.rn();
+fn ldm<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    U: ModeFlag,
+    P: ModeFlag,
+    W: ModeFlag,
+{
+    let rn = instruction.rn();
     let list = instruction.register_list();
 
     let base_in_list = (list & (1 << rn.0)) != 0;
@@ -1556,16 +1648,15 @@ fn ldm<U, P, W>(instruction: Instruction,
     debug_assert!({
         let i = instruction.0;
 
-        ((i >> 25) & 7) == 0b100 &&
-            ((i >> 24) & 1) == P::is_set() as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 22) & 1) == 0 &&
-            ((i >> 21) & 1) == W::is_set() as u32 &&
-            ((i >> 20) & 1) == 1 as u32
+        ((i >> 25) & 7) == 0b100
+            && ((i >> 24) & 1) == P::is_set() as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 22) & 1) == 0
+            && ((i >> 21) & 1) == W::is_set() as u32
+            && ((i >> 20) & 1) == 1_u32
     });
 
-    if list == 0 || rn.is_pc() ||
-        (W::is_set() && base_in_list) {
+    if list == 0 || rn.is_pc() || (W::is_set() && base_in_list) {
         panic!("Unpredictable LDM");
     }
 
@@ -1598,12 +1689,13 @@ fn ldm<U, P, W>(instruction: Instruction,
 //
 // If PC is missing then it's LDM(2) and it loads *user mode*
 // registers.
-fn ldms<U, P, W>(instruction: Instruction,
-                 debugger: &mut Debugger,
-                 cpu: &mut Cpu)
-    where U: ModeFlag, P: ModeFlag, W: ModeFlag {
-
-    let rn   = instruction.rn();
+fn ldms<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    U: ModeFlag,
+    P: ModeFlag,
+    W: ModeFlag,
+{
+    let rn = instruction.rn();
     let list = instruction.register_list();
 
     let base_in_list = (list & (1 << rn.0)) != 0;
@@ -1611,16 +1703,15 @@ fn ldms<U, P, W>(instruction: Instruction,
     debug_assert!({
         let i = instruction.0;
 
-        ((i >> 25) & 7) == 0b100 &&
-            ((i >> 24) & 1) == P::is_set() as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 22) & 1) == 1 &&
-            ((i >> 21) & 1) == W::is_set() as u32 &&
-            ((i >> 20) & 1) == 1 as u32
+        ((i >> 25) & 7) == 0b100
+            && ((i >> 24) & 1) == P::is_set() as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 22) & 1) == 1
+            && ((i >> 21) & 1) == W::is_set() as u32
+            && ((i >> 20) & 1) == 1_u32
     });
 
-    if list == 0 || rn.is_pc() ||
-        (W::is_set() && base_in_list) {
+    if list == 0 || rn.is_pc() || (W::is_set() && base_in_list) {
         panic!("Unpredictable LDM");
     }
 
@@ -1674,11 +1765,13 @@ fn ldms<U, P, W>(instruction: Instruction,
     }
 }
 
-fn stm<U, P, W>(instruction: Instruction,
-                debugger: &mut Debugger,
-                cpu: &mut Cpu)
-    where U: ModeFlag, P: ModeFlag, W: ModeFlag {
-    let rn   = instruction.rn();
+fn stm<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+where
+    U: ModeFlag,
+    P: ModeFlag,
+    W: ModeFlag,
+{
+    let rn = instruction.rn();
     let list = instruction.register_list();
 
     let base_in_list = (list & (1 << rn.0)) != 0;
@@ -1686,16 +1779,15 @@ fn stm<U, P, W>(instruction: Instruction,
     debug_assert!({
         let i = instruction.0;
 
-        ((i >> 25) & 7) == 0b100 &&
-            ((i >> 24) & 1) == P::is_set() as u32 &&
-            ((i >> 23) & 1) == U::is_set() as u32 &&
-            ((i >> 22) & 1) == 0 &&
-            ((i >> 21) & 1) == W::is_set() as u32 &&
-            ((i >> 20) & 1) == 0 as u32
+        ((i >> 25) & 7) == 0b100
+            && ((i >> 24) & 1) == P::is_set() as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 22) & 1) == 0
+            && ((i >> 21) & 1) == W::is_set() as u32
+            && ((i >> 20) & 1) == 0_u32
     });
 
-    if list == 0 || rn.is_pc() ||
-        (W::is_set() && base_in_list) {
+    if list == 0 || rn.is_pc() || (W::is_set() && base_in_list) {
         panic!("Unpredictable LDM");
     }
 
@@ -1733,7 +1825,7 @@ fn stm<U, P, W>(instruction: Instruction,
     }
 }
 
-fn mrs_cpsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn mrs_cpsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let rd = instruction.rd();
 
     if (instruction.0 & 0xf0fff) != 0xf0000 {
@@ -1745,8 +1837,8 @@ fn mrs_cpsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.set_reg(rd, cpsr);
 }
 
-fn msr_cpsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
-    let rm   = instruction.rm();
+fn msr_cpsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+    let rm = instruction.rm();
     let mask = instruction.msr_field_mask();
 
     if (instruction.0 & 0xff00) != 0xf000 {
@@ -1758,7 +1850,7 @@ fn msr_cpsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.msr_cpsr(val, mask);
 }
 
-fn bx(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn bx(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let rm = instruction.rm();
 
     if (instruction.0 & 0xfff00) != 0xfff00 {
@@ -1775,7 +1867,7 @@ fn bx(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.set_pc_thumb(address, thumb);
 }
 
-fn mrs_spsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn mrs_spsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let rd = instruction.rd();
 
     if rd.is_pc() || (instruction.0 & 0xf0fff) != 0xf0000 {
@@ -1787,7 +1879,7 @@ fn mrs_spsr(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.set_reg(rd, val);
 }
 
-fn b(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn b(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let offset = instruction.branch_imm_offset();
 
     let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
@@ -1795,7 +1887,7 @@ fn b(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.set_pc(pc);
 }
 
-fn bl(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn bl(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let offset = instruction.branch_imm_offset();
 
     let pc = cpu.registers[15].wrapping_add(offset);
@@ -1807,1700 +1899,4361 @@ fn bl(instruction: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
     cpu.set_pc(pc);
 }
 
-fn swi(_: Instruction, _: &mut Debugger, cpu: &mut Cpu) {
+fn swi(_: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     cpu.swi();
 }
 
-static OPCODE_LUT: [fn (Instruction, &mut Debugger, &mut Cpu); 4096] = [
+static OPCODE_LUT: [fn(Instruction, &mut dyn Debugger, &mut Cpu); 4096] = [
     // 0x000
-    and::<Mode1LslImm>, and::<Mode1LslReg>,
-    and::<Mode1LsrImm>, and::<Mode1LsrReg>,
-    and::<Mode1AsrImm>, and::<Mode1AsrReg>,
-    and::<Mode1RorImm>, and::<Mode1RorReg>,
-    and::<Mode1LslImm>, mul::<Clear>,
-    and::<Mode1LsrImm>, unimplemented,
-    and::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    and::<Mode1LslImm>,
+    and::<Mode1LslReg>,
+    and::<Mode1LsrImm>,
+    and::<Mode1LsrReg>,
+    and::<Mode1AsrImm>,
+    and::<Mode1AsrReg>,
+    and::<Mode1RorImm>,
+    and::<Mode1RorReg>,
+    and::<Mode1LslImm>,
+    mul::<Clear>,
+    and::<Mode1LsrImm>,
+    unimplemented,
+    and::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x010
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, mul::<Set>, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    mul::<Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x020
-    eor::<Mode1LslImm>, eor::<Mode1LslReg>,
-    eor::<Mode1LsrImm>, eor::<Mode1LsrReg>,
-    eor::<Mode1AsrImm>, eor::<Mode1AsrReg>,
-    eor::<Mode1RorImm>, eor::<Mode1RorReg>,
-    eor::<Mode1LslImm>, mla::<Clear>,
-    eor::<Mode1LsrImm>, unimplemented,
-    eor::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    eor::<Mode1LslImm>,
+    eor::<Mode1LslReg>,
+    eor::<Mode1LsrImm>,
+    eor::<Mode1LsrReg>,
+    eor::<Mode1AsrImm>,
+    eor::<Mode1AsrReg>,
+    eor::<Mode1RorImm>,
+    eor::<Mode1RorReg>,
+    eor::<Mode1LslImm>,
+    mla::<Clear>,
+    eor::<Mode1LsrImm>,
+    unimplemented,
+    eor::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x030
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    eors::<Mode1AsrImm>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    eors::<Mode1AsrImm>, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    eors::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    eors::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x040
-    sub::<Mode1LslImm>, unimplemented, sub::<Mode1LsrImm>, unimplemented,
-    sub::<Mode1AsrImm>, unimplemented, unimplemented, unimplemented,
-    sub::<Mode1LslImm>, unimplemented, sub::<Mode1LsrImm>, unimplemented,
-    sub::<Mode1AsrImm>, unimplemented, unimplemented, unimplemented,
-
+    sub::<Mode1LslImm>,
+    unimplemented,
+    sub::<Mode1LsrImm>,
+    unimplemented,
+    sub::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    sub::<Mode1LslImm>,
+    unimplemented,
+    sub::<Mode1LsrImm>,
+    unimplemented,
+    sub::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x050
-    subs::<Mode1LslImm>, unimplemented, subs::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    subs::<Mode1LslImm>, unimplemented, subs::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    subs::<Mode1LslImm>,
+    unimplemented,
+    subs::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    subs::<Mode1LslImm>,
+    unimplemented,
+    subs::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x060
-    rsb::<Mode1LslImm>, unimplemented, rsb::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    rsb::<Mode1LslImm>, unimplemented, rsb::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    rsb::<Mode1LslImm>,
+    unimplemented,
+    rsb::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    rsb::<Mode1LslImm>,
+    unimplemented,
+    rsb::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x070
-    rsbs::<Mode1LslImm>, unimplemented, rsbs::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    rsbs::<Mode1LslImm>, unimplemented, rsbs::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    rsbs::<Mode1LslImm>,
+    unimplemented,
+    rsbs::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    rsbs::<Mode1LslImm>,
+    unimplemented,
+    rsbs::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x080
-    add::<Mode1LslImm>, add::<Mode1LslReg>,
-    add::<Mode1LsrImm>, add::<Mode1LsrReg>,
-    add::<Mode1AsrImm>, add::<Mode1AsrReg>,
-    add::<Mode1RorImm>, add::<Mode1RorReg>,
-    add::<Mode1LslImm>, unimplemented,
-    add::<Mode1LsrImm>, unimplemented,
-    add::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    add::<Mode1LslImm>,
+    add::<Mode1LslReg>,
+    add::<Mode1LsrImm>,
+    add::<Mode1LsrReg>,
+    add::<Mode1AsrImm>,
+    add::<Mode1AsrReg>,
+    add::<Mode1RorImm>,
+    add::<Mode1RorReg>,
+    add::<Mode1LslImm>,
+    unimplemented,
+    add::<Mode1LsrImm>,
+    unimplemented,
+    add::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x090
-    adds::<Mode1LslImm>, adds::<Mode1LslReg>,
-    adds::<Mode1LsrImm>, adds::<Mode1LsrReg>,
-    adds::<Mode1AsrImm>, adds::<Mode1AsrReg>,
-    adds::<Mode1RorImm>, adds::<Mode1RorReg>,
-    adds::<Mode1LslImm>, unimplemented,
-    adds::<Mode1LsrImm>, unimplemented,
-    adds::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    adds::<Mode1LslImm>,
+    adds::<Mode1LslReg>,
+    adds::<Mode1LsrImm>,
+    adds::<Mode1LsrReg>,
+    adds::<Mode1AsrImm>,
+    adds::<Mode1AsrReg>,
+    adds::<Mode1RorImm>,
+    adds::<Mode1RorReg>,
+    adds::<Mode1LslImm>,
+    unimplemented,
+    adds::<Mode1LsrImm>,
+    unimplemented,
+    adds::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0a0
-    adc::<Mode1LslImm>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    adc::<Mode1LslImm>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    adc::<Mode1LslImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    adc::<Mode1LslImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0c0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, strh::<Mode3ImmPost, Set>,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    strh::<Mode3ImmPost, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0d0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, ldrh::<Mode3ImmPost, Set>,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    ldrh::<Mode3ImmPost, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x0f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x100
-    mrs_cpsr, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    mrs_cpsr,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x110
-    tst::<Mode1LslImm>, tst::<Mode1LslReg>,
-    tst::<Mode1LsrImm>, tst::<Mode1LsrReg>,
-    tst::<Mode1AsrImm>, tst::<Mode1AsrReg>,
-    tst::<Mode1RorImm>, tst::<Mode1RorReg>,
-    tst::<Mode1LslImm>, unimplemented,
-    tst::<Mode1LsrImm>, unimplemented,
-    tst::<Mode1AsrImm>, unimplemented,
-    tst::<Mode1RorImm>, unimplemented,
-
+    tst::<Mode1LslImm>,
+    tst::<Mode1LslReg>,
+    tst::<Mode1LsrImm>,
+    tst::<Mode1LsrReg>,
+    tst::<Mode1AsrImm>,
+    tst::<Mode1AsrReg>,
+    tst::<Mode1RorImm>,
+    tst::<Mode1RorReg>,
+    tst::<Mode1LslImm>,
+    unimplemented,
+    tst::<Mode1LsrImm>,
+    unimplemented,
+    tst::<Mode1AsrImm>,
+    unimplemented,
+    tst::<Mode1RorImm>,
+    unimplemented,
     // 0x120
-    msr_cpsr, bx, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    msr_cpsr,
+    bx,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x130
-    teq::<Mode1LslImm>, unimplemented, teq::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    teq::<Mode1LslImm>, unimplemented, teq::<Mode1LsrImm>, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    teq::<Mode1LslImm>,
+    unimplemented,
+    teq::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    teq::<Mode1LslImm>,
+    unimplemented,
+    teq::<Mode1LsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x140
-    mrs_spsr, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, strh::<Mode3Imm, Clear>,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    mrs_spsr,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    strh::<Mode3Imm, Clear>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x150
-    cmp::<Mode1LslImm>, unimplemented,
-    cmp::<Mode1LsrImm>, unimplemented,
-    cmp::<Mode1AsrImm>, unimplemented,
-    cmp::<Mode1RorImm>, unimplemented,
-    cmp::<Mode1LslImm>, unimplemented,
-    cmp::<Mode1LsrImm>, ldrh::<Mode3Imm, Clear>,
-    cmp::<Mode1AsrImm>, unimplemented,
-    unimplemented, ldrsh::<Mode3Imm, Clear>,
-
+    cmp::<Mode1LslImm>,
+    unimplemented,
+    cmp::<Mode1LsrImm>,
+    unimplemented,
+    cmp::<Mode1AsrImm>,
+    unimplemented,
+    cmp::<Mode1RorImm>,
+    unimplemented,
+    cmp::<Mode1LslImm>,
+    unimplemented,
+    cmp::<Mode1LsrImm>,
+    ldrh::<Mode3Imm, Clear>,
+    cmp::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    ldrsh::<Mode3Imm, Clear>,
     // 0x160
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, strh::<Mode3ImmPre, Clear>,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    strh::<Mode3ImmPre, Clear>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x170
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x180
-    orr::<Mode1LslImm>, orr::<Mode1LslReg>,
-    orr::<Mode1LsrImm>, orr::<Mode1LsrReg>,
-    orr::<Mode1AsrImm>, orr::<Mode1AsrReg>,
-    orr::<Mode1RorImm>, orr::<Mode1RorReg>,
-    orr::<Mode1LslImm>, unimplemented,
-    orr::<Mode1LsrImm>, strh::<Mode3Reg, Set>,
-    orr::<Mode1AsrImm>, unimplemented,
-    orr::<Mode1RorImm>, unimplemented,
-
+    orr::<Mode1LslImm>,
+    orr::<Mode1LslReg>,
+    orr::<Mode1LsrImm>,
+    orr::<Mode1LsrReg>,
+    orr::<Mode1AsrImm>,
+    orr::<Mode1AsrReg>,
+    orr::<Mode1RorImm>,
+    orr::<Mode1RorReg>,
+    orr::<Mode1LslImm>,
+    unimplemented,
+    orr::<Mode1LsrImm>,
+    strh::<Mode3Reg, Set>,
+    orr::<Mode1AsrImm>,
+    unimplemented,
+    orr::<Mode1RorImm>,
+    unimplemented,
     // 0x190
-    orrs::<Mode1LslImm>, orrs::<Mode1LslReg>,
-    orrs::<Mode1LsrImm>, orrs::<Mode1LsrReg>,
-    orrs::<Mode1AsrImm>, orrs::<Mode1AsrReg>,
-    orrs::<Mode1RorImm>, orrs::<Mode1RorReg>,
-    orrs::<Mode1LslImm>, unimplemented,
-    orrs::<Mode1LsrImm>, ldrh::<Mode3Reg, Set>,
-    orrs::<Mode1AsrImm>, ldrsb::<Mode3Reg, Set>,
-    unimplemented, ldrsh::<Mode3Reg, Set>,
-
+    orrs::<Mode1LslImm>,
+    orrs::<Mode1LslReg>,
+    orrs::<Mode1LsrImm>,
+    orrs::<Mode1LsrReg>,
+    orrs::<Mode1AsrImm>,
+    orrs::<Mode1AsrReg>,
+    orrs::<Mode1RorImm>,
+    orrs::<Mode1RorReg>,
+    orrs::<Mode1LslImm>,
+    unimplemented,
+    orrs::<Mode1LsrImm>,
+    ldrh::<Mode3Reg, Set>,
+    orrs::<Mode1AsrImm>,
+    ldrsb::<Mode3Reg, Set>,
+    unimplemented,
+    ldrsh::<Mode3Reg, Set>,
     // 0x1a0
-    mov::<Mode1LslImm>, mov::<Mode1LslReg>,
-    mov::<Mode1LsrImm>, mov::<Mode1LsrReg>,
-    mov::<Mode1AsrImm>, mov::<Mode1AsrReg>,
-    mov::<Mode1RorImm>, mov::<Mode1RorReg>,
-    mov::<Mode1LslImm>, unimplemented,
-    mov::<Mode1LsrImm>, unimplemented,
-    mov::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    mov::<Mode1LslImm>,
+    mov::<Mode1LslReg>,
+    mov::<Mode1LsrImm>,
+    mov::<Mode1LsrReg>,
+    mov::<Mode1AsrImm>,
+    mov::<Mode1AsrReg>,
+    mov::<Mode1RorImm>,
+    mov::<Mode1RorReg>,
+    mov::<Mode1LslImm>,
+    unimplemented,
+    mov::<Mode1LsrImm>,
+    unimplemented,
+    mov::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x1b0
-    movs::<Mode1LslImm>, movs::<Mode1LslReg>,
-    movs::<Mode1LsrImm>, movs::<Mode1LsrReg>,
-    movs::<Mode1AsrImm>, unimplemented,
-    movs::<Mode1RorImm>, unimplemented,
-    movs::<Mode1LslImm>, unimplemented,
-    movs::<Mode1LsrImm>, unimplemented,
-    movs::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    movs::<Mode1LslImm>,
+    movs::<Mode1LslReg>,
+    movs::<Mode1LsrImm>,
+    movs::<Mode1LsrReg>,
+    movs::<Mode1AsrImm>,
+    unimplemented,
+    movs::<Mode1RorImm>,
+    unimplemented,
+    movs::<Mode1LslImm>,
+    unimplemented,
+    movs::<Mode1LsrImm>,
+    unimplemented,
+    movs::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x1c0
-    bic::<Mode1LslImm>, bic::<Mode1LslReg>,
-    bic::<Mode1LsrImm>, bic::<Mode1LsrReg>,
-    bic::<Mode1AsrImm>, bic::<Mode1AsrReg>,
-    bic::<Mode1RorImm>, bic::<Mode1RorReg>,
-    bic::<Mode1LslImm>, unimplemented,
-    bic::<Mode1LsrImm>, strh::<Mode3Imm, Set>,
-    bic::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    bic::<Mode1LslImm>,
+    bic::<Mode1LslReg>,
+    bic::<Mode1LsrImm>,
+    bic::<Mode1LsrReg>,
+    bic::<Mode1AsrImm>,
+    bic::<Mode1AsrReg>,
+    bic::<Mode1RorImm>,
+    bic::<Mode1RorReg>,
+    bic::<Mode1LslImm>,
+    unimplemented,
+    bic::<Mode1LsrImm>,
+    strh::<Mode3Imm, Set>,
+    bic::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x1d0
-    bics::<Mode1LslImm>, bics::<Mode1LslReg>,
-    unimplemented, unimplemented,
-    unimplemented, unimplemented,
-    unimplemented, unimplemented,
-    bics::<Mode1LslImm>, unimplemented,
-    unimplemented, ldrh::<Mode3Imm, Set>,
-    unimplemented, ldrsb::<Mode3Imm, Set>,
-    unimplemented, ldrsh::<Mode3Imm, Set>,
-
+    bics::<Mode1LslImm>,
+    bics::<Mode1LslReg>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    bics::<Mode1LslImm>,
+    unimplemented,
+    unimplemented,
+    ldrh::<Mode3Imm, Set>,
+    unimplemented,
+    ldrsb::<Mode3Imm, Set>,
+    unimplemented,
+    ldrsh::<Mode3Imm, Set>,
     // 0x1e0
-    mvn::<Mode1LslImm>, mvn::<Mode1LslReg>,
-    mvn::<Mode1LsrImm>, mvn::<Mode1LsrReg>,
-    mvn::<Mode1AsrImm>, unimplemented,
-    mvn::<Mode1RorImm>, unimplemented,
-    mvn::<Mode1LslImm>, unimplemented,
-    mvn::<Mode1LsrImm>, unimplemented,
-    mvn::<Mode1AsrImm>, unimplemented,
-    unimplemented, unimplemented,
-
+    mvn::<Mode1LslImm>,
+    mvn::<Mode1LslReg>,
+    mvn::<Mode1LsrImm>,
+    mvn::<Mode1LsrReg>,
+    mvn::<Mode1AsrImm>,
+    unimplemented,
+    mvn::<Mode1RorImm>,
+    unimplemented,
+    mvn::<Mode1LslImm>,
+    unimplemented,
+    mvn::<Mode1LsrImm>,
+    unimplemented,
+    mvn::<Mode1AsrImm>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x1f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, ldrh::<Mode3ImmPre, Set>,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    ldrh::<Mode3ImmPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x200
-    and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>,
-    and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>,
-    and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>,
-    and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>, and::<Mode1Imm>,
-
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
+    and::<Mode1Imm>,
     // 0x210
-    ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>,
-    ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>,
-    ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>,
-    ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>, ands::<Mode1Imm>,
-
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
+    ands::<Mode1Imm>,
     // 0x220
-    eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>,
-    eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>,
-    eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>,
-    eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>, eor::<Mode1Imm>,
-
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
+    eor::<Mode1Imm>,
     // 0x230
-    eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>,
-    eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>,
-    eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>,
-    eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>, eors::<Mode1Imm>,
-
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
+    eors::<Mode1Imm>,
     // 0x240
-    sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>,
-    sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>,
-    sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>,
-    sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>, sub::<Mode1Imm>,
-
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
+    sub::<Mode1Imm>,
     // 0x250
-    subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>,
-    subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>,
-    subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>,
-    subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>, subs::<Mode1Imm>,
-
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
+    subs::<Mode1Imm>,
     // 0x260
-    rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>,
-    rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>,
-    rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>,
-    rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>, rsb::<Mode1Imm>,
-
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
+    rsb::<Mode1Imm>,
     // 0x270
-    rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>,
-    rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>,
-    rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>,
-    rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>, rsbs::<Mode1Imm>,
-
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
+    rsbs::<Mode1Imm>,
     // 0x280
-    add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>,
-    add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>,
-    add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>,
-    add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>, add::<Mode1Imm>,
-
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
+    add::<Mode1Imm>,
     // 0x290
-    adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>,
-    adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>,
-    adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>,
-    adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>, adds::<Mode1Imm>,
-
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
+    adds::<Mode1Imm>,
     // 0x2a0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x2b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x2c0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x2d0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x2e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x2f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x300
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x310
-    tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>,
-    tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>,
-    tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>,
-    tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>, tst::<Mode1Imm>,
-
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
+    tst::<Mode1Imm>,
     // 0x320
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x330
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x340
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x350
-    cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>,
-    cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>,
-    cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>,
-    cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>, cmp::<Mode1Imm>,
-
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
+    cmp::<Mode1Imm>,
     // 0x360
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x370
-    cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>,
-    cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>,
-    cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>,
-    cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>, cmn::<Mode1Imm>,
-
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
+    cmn::<Mode1Imm>,
     // 0x380
-    orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>,
-    orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>,
-    orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>,
-    orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>, orr::<Mode1Imm>,
-
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
+    orr::<Mode1Imm>,
     // 0x390
-    orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>,
-    orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>,
-    orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>,
-    orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>, orrs::<Mode1Imm>,
-
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
+    orrs::<Mode1Imm>,
     // 0x3a0
-    mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>,
-    mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>,
-    mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>,
-    mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>, mov::<Mode1Imm>,
-
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
+    mov::<Mode1Imm>,
     // 0x3b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x3c0
-    bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>,
-    bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>,
-    bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>,
-    bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>, bic::<Mode1Imm>,
-
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
+    bic::<Mode1Imm>,
     // 0x3d0
-    bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>,
-    bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>,
-    bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>,
-    bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>, bics::<Mode1Imm>,
-
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
+    bics::<Mode1Imm>,
     // 0x3e0
-    mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>,
-    mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>,
-    mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>,
-    mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>, mvn::<Mode1Imm>,
-
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
+    mvn::<Mode1Imm>,
     // 0x3f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x400
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x410
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x420
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x430
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x440
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-    strb::<Mode2ImmPost, Clear>, strb::<Mode2ImmPost, Clear>,
-
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
+    strb::<Mode2ImmPost, Clear>,
     // 0x450
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x460
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x470
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x480
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-    str::<Mode2ImmPost, Set>, str::<Mode2ImmPost, Set>,
-
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
+    str::<Mode2ImmPost, Set>,
     // 0x490
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-    ldr::<Mode2ImmPost, Set>, ldr::<Mode2ImmPost, Set>,
-
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
+    ldr::<Mode2ImmPost, Set>,
     // 0x4a0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x4b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x4c0
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-    strb::<Mode2ImmPost, Set>, strb::<Mode2ImmPost, Set>,
-
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
+    strb::<Mode2ImmPost, Set>,
     // 0x4d0
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-    ldrb::<Mode2ImmPost, Set>, ldrb::<Mode2ImmPost, Set>,
-
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
+    ldrb::<Mode2ImmPost, Set>,
     // 0x4e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x4f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x500
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-    str::<Mode2Imm, Clear>, str::<Mode2Imm, Clear>,
-
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
+    str::<Mode2Imm, Clear>,
     // 0x510
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-    ldr::<Mode2Imm, Clear>, ldr::<Mode2Imm, Clear>,
-
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
+    ldr::<Mode2Imm, Clear>,
     // 0x520
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-    str::<Mode2ImmPre, Clear>, str::<Mode2ImmPre, Clear>,
-
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
+    str::<Mode2ImmPre, Clear>,
     // 0x530
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-    ldr::<Mode2ImmPre, Clear>, ldr::<Mode2ImmPre, Clear>,
-
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
+    ldr::<Mode2ImmPre, Clear>,
     // 0x540
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-    strb::<Mode2Imm, Clear>, strb::<Mode2Imm, Clear>,
-
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
+    strb::<Mode2Imm, Clear>,
     // 0x550
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-    ldrb::<Mode2Imm, Clear>, ldrb::<Mode2Imm, Clear>,
-
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
+    ldrb::<Mode2Imm, Clear>,
     // 0x560
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x570
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x580
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-    str::<Mode2Imm, Set>, str::<Mode2Imm, Set>,
-
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
+    str::<Mode2Imm, Set>,
     // 0x590
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-    ldr::<Mode2Imm, Set>, ldr::<Mode2Imm, Set>,
-
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
+    ldr::<Mode2Imm, Set>,
     // 0x5a0
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-    str::<Mode2ImmPre, Set>, str::<Mode2ImmPre, Set>,
-
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
+    str::<Mode2ImmPre, Set>,
     // 0x5b0
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-    ldr::<Mode2ImmPre, Set>, ldr::<Mode2ImmPre, Set>,
-
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
+    ldr::<Mode2ImmPre, Set>,
     // 0x5c0
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-    strb::<Mode2Imm, Set>, strb::<Mode2Imm, Set>,
-
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
+    strb::<Mode2Imm, Set>,
     // 0x5d0
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-    ldrb::<Mode2Imm, Set>, ldrb::<Mode2Imm, Set>,
-
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
+    ldrb::<Mode2Imm, Set>,
     // 0x5e0
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-    strb::<Mode2ImmPre, Set>, strb::<Mode2ImmPre, Set>,
-
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
+    strb::<Mode2ImmPre, Set>,
     // 0x5f0
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-    ldrb::<Mode2ImmPre, Set>, ldrb::<Mode2ImmPre, Set>,
-
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
+    ldrb::<Mode2ImmPre, Set>,
     // 0x600
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x610
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x620
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x630
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x640
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x650
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x660
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x670
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x680
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x690
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6a0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6c0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6d0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x6f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x700
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x710
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x720
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x730
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x740
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x750
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x760
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x770
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x780
-    str::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    str::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    str::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    str::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x790
-    ldr::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    ldr::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    ldr::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    ldr::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7a0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7b0
-    ldr::<Mode2LslRegPre, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    ldr::<Mode2LslRegPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7c0
-    strb::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    strb::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    strb::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    strb::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7d0
-    ldrb::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    ldrb::<Mode2LslReg, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    ldrb::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    ldrb::<Mode2LslReg, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7e0
-    strb::<Mode2LslRegPre, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    strb::<Mode2LslRegPre, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    strb::<Mode2LslRegPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    strb::<Mode2LslRegPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x7f0
-    ldrb::<Mode2LslRegPre, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    ldrb::<Mode2LslRegPre, Set>, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    ldrb::<Mode2LslRegPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    ldrb::<Mode2LslRegPre, Set>,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x800
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x810
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x820
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x830
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x840
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x850
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x860
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x870
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x880
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-    stm::<Set, Clear, Clear>, stm::<Set, Clear, Clear>,
-
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
+    stm::<Set, Clear, Clear>,
     // 0x890
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-    ldm::<Set, Clear, Clear>, ldm::<Set, Clear, Clear>,
-
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
+    ldm::<Set, Clear, Clear>,
     // 0x8a0
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-    stm::<Set, Clear, Set>, stm::<Set, Clear, Set>,
-
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
+    stm::<Set, Clear, Set>,
     // 0x8b0
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-    ldm::<Set, Clear, Set>, ldm::<Set, Clear, Set>,
-
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
+    ldm::<Set, Clear, Set>,
     // 0x8c0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x8d0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x8e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x8f0
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-    ldms::<Set, Clear, Set>, ldms::<Set, Clear, Set>,
-
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
+    ldms::<Set, Clear, Set>,
     // 0x900
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x910
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-    ldm::<Clear, Set, Clear>, ldm::<Clear, Set, Clear>,
-
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
+    ldm::<Clear, Set, Clear>,
     // 0x920
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-    stm::<Clear, Set, Set>, stm::<Clear, Set, Set>,
-
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
+    stm::<Clear, Set, Set>,
     // 0x930
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x940
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x950
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x960
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x970
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x980
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x990
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9a0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9b0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9c0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9d0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9e0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0x9f0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xa00
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa10
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa20
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa30
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa40
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa50
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa60
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa70
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa80
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xa90
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xaa0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xab0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xac0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xad0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xae0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xaf0
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-    b, b, b, b,
-
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
+    b,
     // 0xb00
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb10
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb20
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb30
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb40
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb50
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb60
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb70
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb80
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xb90
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xba0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xbb0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xbc0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xbd0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xbe0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xbf0
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-    bl, bl, bl, bl,
-
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
+    bl,
     // 0xc00
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc10
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc20
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc30
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc40
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc50
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc60
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc70
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc80
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xc90
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xca0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xcb0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xcc0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xcd0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xce0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xcf0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd00
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd10
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd20
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd30
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd40
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd50
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd60
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd70
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd80
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xd90
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xda0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xdb0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xdc0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xdd0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xde0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xdf0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe00
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe10
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe20
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe30
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe40
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe50
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe60
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe70
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe80
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xe90
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xea0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xeb0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xec0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xed0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xee0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xef0
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-    unimplemented, unimplemented, unimplemented, unimplemented,
-
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
+    unimplemented,
     // 0xf00
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf10
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf20
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf30
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf40
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf50
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf60
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf70
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf80
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xf90
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xfa0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xfb0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xfc0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xfd0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xfe0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
     // 0xff0
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
-    swi, swi, swi, swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
+    swi,
 ];

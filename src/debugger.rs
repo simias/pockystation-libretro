@@ -18,19 +18,14 @@ pub trait Debugger {
     fn memory_write(&mut self, cpu: &mut Cpu, addr: u32);
 }
 
-
 /// Dummy debugger implementation that does nothing. Can be used when
 /// debugging is disabled.
 impl Debugger for () {
-    fn trigger_break(&mut self) {
-    }
+    fn trigger_break(&mut self) {}
 
-    fn pc_change(&mut self, _: &mut Cpu) {
-    }
+    fn pc_change(&mut self, _: &mut Cpu) {}
 
-    fn memory_read(&mut self, _: &mut Cpu, _: u32) {
-    }
+    fn memory_read(&mut self, _: &mut Cpu, _: u32) {}
 
-    fn memory_write(&mut self, _: &mut Cpu, _: u32) {
-    }
+    fn memory_write(&mut self, _: &mut Cpu, _: u32) {}
 }

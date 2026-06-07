@@ -13,23 +13,22 @@ pub struct Dac {
     /// the real hardware anyway...
     sample: i16,
     enabled: bool,
-    backend: Box<Backend>,
+    backend: Box<dyn Backend>,
     /// Master clock divider
     divider: u32,
 }
 
 impl Dac {
-    pub fn new(backend: Box<Backend>) -> Dac {
+    pub fn new(backend: Box<dyn Backend>) -> Dac {
         Dac {
             sample: 0,
             enabled: false,
-            backend: backend,
+            backend,
             divider: MASTER_CLOCK_DIV,
         }
     }
 
     pub fn tick(&mut self, mut master_ticks: u32) {
-
         while master_ticks > 0 {
             if self.divider >= master_ticks {
                 self.divider -= master_ticks;
@@ -41,18 +40,12 @@ impl Dac {
                 self.divider = MASTER_CLOCK_DIV;
 
                 // Time to generate a sample
-                let sample =
-                    if self.enabled {
-                        self.sample
-                    } else {
-                        0
-                    };
+                let sample = if self.enabled { self.sample } else { 0 };
 
                 self.backend.push_sample(sample);
             }
         }
     }
-
 
     pub fn store<A: Addressable>(&mut self, offset: u32, val: u32) {
         if A::size() == 1 {
@@ -80,7 +73,7 @@ impl Dac {
         }
     }
 
-    pub fn set_backend(&mut self, backend: Box<Backend>) {
+    pub fn set_backend(&mut self, backend: Box<dyn Backend>) {
         self.backend = backend
     }
 }
@@ -114,7 +107,6 @@ impl<'de> Deserialize<'de> for Dac {
     {
         let s = SerializedDac::deserialize(deserializer)?;
 
-
         let mut dac = Dac::new(Box::new(DummyBackend));
         dac.sample = s.sample;
         dac.enabled = s.enabled;
@@ -131,8 +123,7 @@ pub trait Backend {
 struct DummyBackend;
 
 impl Backend for DummyBackend {
-    fn push_sample(&mut self, _: i16) {
-    }
+    fn push_sample(&mut self, _: i16) {}
 }
 
 /// Technically the audio frequency could reach MASTER_CLOCK_HZ (if

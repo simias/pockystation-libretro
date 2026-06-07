@@ -2,8 +2,8 @@ use std::fmt;
 use std::mem::swap;
 use std::panic;
 
-use memory::{Interconnect, Addressable, Word, HalfWord};
 use debugger::Debugger;
+use memory::{Addressable, HalfWord, Interconnect, Word};
 
 mod armv4_is;
 mod thumbv1_is;
@@ -54,33 +54,32 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new(inter: Interconnect) -> Cpu {
-        let mut cpu =
-            Cpu {
-                // condition flags and general purpose registers are
-                // undefined on reset
-                n: true,
-                z: true,
-                c: true,
-                v: true,
-                registers: [0xdeadbeef; 16],
-                user_system_bank: [0; 2],
-                supervisor_bank: [0; 3],
-                abort_bank: [0; 3],
-                undefined_bank: [0; 3],
-                irq_bank: [0; 3],
-                fiq_bank: [0; 8],
-                next_pc: 0,
-                thumb: false,
-                // Supervisor mode on reset
-                mode: Mode::Supervisor,
-                // IRQs disabled on reset
-                irq_en: false,
-                // FIQs disabled on reset
-                fiq_en: false,
-                spsr: 0,
-                inter: inter,
-                debug_on_bkpt: false,
-            };
+        let mut cpu = Cpu {
+            // condition flags and general purpose registers are
+            // undefined on reset
+            n: true,
+            z: true,
+            c: true,
+            v: true,
+            registers: [0xdeadbeef; 16],
+            user_system_bank: [0; 2],
+            supervisor_bank: [0; 3],
+            abort_bank: [0; 3],
+            undefined_bank: [0; 3],
+            irq_bank: [0; 3],
+            fiq_bank: [0; 8],
+            next_pc: 0,
+            thumb: false,
+            // Supervisor mode on reset
+            mode: Mode::Supervisor,
+            // IRQs disabled on reset
+            irq_en: false,
+            // FIQs disabled on reset
+            fiq_en: false,
+            spsr: 0,
+            inter,
+            debug_on_bkpt: false,
+        };
 
         cpu.reset();
 
@@ -111,10 +110,7 @@ impl Cpu {
     }
 
     /// Run CPU for `master_ticks` master clock periods
-    pub fn run_ticks<D: Debugger>(&mut self,
-                                  debugger: &mut D,
-                                  master_ticks: u32) {
-
+    pub fn run_ticks<D: Debugger>(&mut self, debugger: &mut D, master_ticks: u32) {
         while self.inter.frame_ticks() < master_ticks {
             self.run_next_instruction(debugger);
         }
@@ -123,7 +119,9 @@ impl Cpu {
     }
 
     pub fn run_next_instruction<D>(&mut self, debugger: &mut D)
-        where D: Debugger {
+    where
+        D: Debugger,
+    {
         // Assume each instruction takes exactly one CPU cycle for
         // now, a gross oversimplification...
         self.inter.tick(1);
@@ -157,7 +155,6 @@ impl Cpu {
             let instruction = self.inter.load::<HalfWord>(pc) as u16;
 
             thumbv1_is::execute(self, debugger, instruction);
-
         } else {
             // In ARM mode the PC register (R15) always points to the
             // current instruction's addres + 8, except for STR/STM
@@ -242,12 +239,7 @@ impl Cpu {
 
     /// Return the PC to the currently executed instruction
     pub fn current_pc(&self) -> u32 {
-        let off =
-            if self.thumb {
-                2
-            } else {
-                4
-            };
+        let off = if self.thumb { 2 } else { 4 };
 
         self.next_pc.wrapping_sub(off)
     }
@@ -255,12 +247,7 @@ impl Cpu {
     pub fn set_pc(&mut self, pc: u32) {
         self.next_pc = pc;
 
-        let r15_offset =
-            if self.thumb {
-                2
-            } else {
-                4
-            };
+        let r15_offset = if self.thumb { 2 } else { 4 };
 
         self.registers[15] = pc.wrapping_add(r15_offset);
     }
@@ -309,7 +296,7 @@ impl Cpu {
                 // User mode has no SPSR
                 self.user_system_bank[0] = self.registers[14];
                 self.user_system_bank[1] = self.registers[13];
-            },
+            }
             Mode::Supervisor => {
                 self.supervisor_bank[0] = self.spsr;
                 self.supervisor_bank[1] = self.registers[14];
@@ -350,29 +337,29 @@ impl Cpu {
             Mode::User | Mode::System => {
                 self.registers[14] = self.user_system_bank[0];
                 self.registers[13] = self.user_system_bank[1];
-            },
+            }
             Mode::Supervisor => {
-                self.spsr          = self.supervisor_bank[0];
+                self.spsr = self.supervisor_bank[0];
                 self.registers[14] = self.supervisor_bank[1];
                 self.registers[13] = self.supervisor_bank[2];
             }
             Mode::Abort => {
-                self.spsr          = self.abort_bank[0];
+                self.spsr = self.abort_bank[0];
                 self.registers[14] = self.abort_bank[1];
                 self.registers[13] = self.abort_bank[2];
             }
             Mode::Undefined => {
-                self.spsr          = self.undefined_bank[0];
+                self.spsr = self.undefined_bank[0];
                 self.registers[14] = self.undefined_bank[1];
                 self.registers[13] = self.undefined_bank[2];
             }
             Mode::Irq => {
-                self.spsr          = self.irq_bank[0];
+                self.spsr = self.irq_bank[0];
                 self.registers[14] = self.irq_bank[1];
                 self.registers[13] = self.irq_bank[2];
             }
             Mode::Fiq => {
-                self.spsr          = self.fiq_bank[0];
+                self.spsr = self.fiq_bank[0];
                 self.registers[14] = self.fiq_bank[1];
                 self.registers[13] = self.fiq_bank[2];
 
@@ -408,8 +395,7 @@ impl Cpu {
         if self.mode.has_spsr() {
             self.spsr
         } else {
-            panic!("Attempted to access SPSR in {:?} mode",
-                   self.mode);
+            panic!("Attempted to access SPSR in {:?} mode", self.mode);
         }
     }
 
@@ -513,46 +499,41 @@ impl Cpu {
         //
         // XXX Remove that when the entire address space is
         // implemented.
-        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            self.inter.load::<A>(addr)
-        }));
+        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| self.inter.load::<A>(addr)));
 
-        match r {
-            Ok(v) => v,
-            // Return dummy value
-            Err(_) => 0xbadbadbd,
-        }
+        r.unwrap_or(0xbadbadbd)
     }
 
-    fn load<A>(&mut self, debugger: &mut Debugger, addr: u32) -> u32
-        where A: Addressable {
-
+    fn load<A>(&mut self, debugger: &mut dyn Debugger, addr: u32) -> u32
+    where
+        A: Addressable,
+    {
         debugger.memory_read(self, addr);
 
         let align = (A::size() - 1) as u32;
 
         if addr & align != 0 {
-            panic!("Unaligned load{}! 0x{:08x} {:?}",
-                   A::size() * 8,
-                   addr,
-                   self);
+            panic!("Unaligned load{}! 0x{:08x} {:?}", A::size() * 8, addr, self);
         }
 
         self.inter.load::<A>(addr)
     }
 
-    fn store<A>(&mut self, debugger: &mut Debugger, addr: u32, val: u32)
-        where A: Addressable {
-
+    fn store<A>(&mut self, debugger: &mut dyn Debugger, addr: u32, val: u32)
+    where
+        A: Addressable,
+    {
         debugger.memory_write(self, addr);
 
         let align = (A::size() - 1) as u32;
 
         if (addr & align) != 0 {
-            panic!("Unaligned store{}! 0x{:08x} {:?}",
-                   A::size() * 8,
-                   addr,
-                   self);
+            panic!(
+                "Unaligned store{}! 0x{:08x} {:?}",
+                A::size() * 8,
+                addr,
+                self
+            );
         }
 
         self.inter.store::<A>(addr, val);
@@ -561,51 +542,47 @@ impl Cpu {
 
 impl fmt::Debug for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, "CPC:  0x{:08x}  Mode: {:?}",
-                      self.next_pc, self.mode));
+        writeln!(f, "CPC:  0x{:08x}  Mode: {:?}", self.next_pc, self.mode)?;
 
         if self.mode.has_spsr() {
-            try!(writeln!(f, "CPSR: 0x{:08x}  SPSR: 0x{:08x}",
-                          self.cpsr(), self.spsr));
+            writeln!(f, "CPSR: 0x{:08x}  SPSR: 0x{:08x}", self.cpsr(), self.spsr)?;
         } else {
-            try!(writeln!(f, "CPSR: 0x{:08x}", self.cpsr()));
+            writeln!(f, "CPSR: 0x{:08x}", self.cpsr())?;
         }
 
-        let is =
-            if self.thumb {
-                "Thumb"
-            } else {
-                "ARM"
-            };
+        let is = if self.thumb { "Thumb" } else { "ARM" };
 
         let flag = |f, l| if f { l } else { '-' };
 
-        try!(writeln!(f, "{}{}{}{} {}{} {}",
-                      flag(self.n, 'N'),
-                      flag(self.z, 'Z'),
-                      flag(self.c, 'C'),
-                      flag(self.v, 'V'),
-                      flag(self.irq_en, 'I'),
-                      flag(self.fiq_en, 'F'),
-                      is));
+        writeln!(
+            f,
+            "{}{}{}{} {}{} {}",
+            flag(self.n, 'N'),
+            flag(self.z, 'Z'),
+            flag(self.c, 'C'),
+            flag(self.v, 'V'),
+            flag(self.irq_en, 'I'),
+            flag(self.fiq_en, 'F'),
+            is
+        )?;
 
         for i in 0..10 {
-            try!(write!(f, "R{}:   0x{:08x}", i, self.registers[i]));
+            write!(f, "R{}:   0x{:08x}", i, self.registers[i])?;
 
             if i % 2 == 0 {
-                try!(write!(f, "  "));
+                write!(f, "  ")?;
             } else {
-                try!(write!(f, "\n"));
+                write!(f, "\n")?;
             }
         }
 
         for i in 10..16 {
-            try!(write!(f, "R{}:  0x{:08x}", i, self.registers[i]));
+            write!(f, "R{}:  0x{:08x}", i, self.registers[i])?;
 
             if i % 2 == 0 {
-                try!(write!(f, "  "));
+                write!(f, "  ")?;
             } else {
-                try!(write!(f, "\n"));
+                write!(f, "\n")?;
             }
         }
 
@@ -633,16 +610,15 @@ impl fmt::Display for RegisterIndex {
 }
 
 /// CPU modes
-#[derive(serde::Serialize, serde::Deserialize)]
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
 enum Mode {
-    User       = 0b10000,
-    Fiq        = 0b10001,
-    Irq        = 0b10010,
+    User = 0b10000,
+    Fiq = 0b10001,
+    Irq = 0b10010,
     Supervisor = 0b10011,
-    Abort      = 0b10111,
-    Undefined  = 0b11011,
-    System     = 0b11111,
+    Abort = 0b10111,
+    Undefined = 0b11011,
+    System = 0b11111,
 }
 
 impl Mode {

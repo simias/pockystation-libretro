@@ -26,14 +26,11 @@ impl Timer {
             counter: 0,
             reload: 0,
             divider: 0,
-            interrupt: interrupt,
+            interrupt,
         }
     }
 
-    pub fn tick(&mut self,
-                irq: &mut IrqController,
-                mut cpu_ticks: u32) {
-
+    pub fn tick(&mut self, irq: &mut IrqController, mut cpu_ticks: u32) {
         if self.enabled {
             while cpu_ticks > 0 {
                 if self.counter >= cpu_ticks {

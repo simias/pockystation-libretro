@@ -9,6 +9,12 @@ pub struct Lcd {
     fb: [u32; 32],
 }
 
+impl Default for Lcd {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Lcd {
     pub fn new() -> Lcd {
         Lcd {
@@ -26,7 +32,7 @@ impl Lcd {
         match offset {
             0 => self.mode = val as u8,
             4 => self.calibration = val as u8,
-            0x100...0x17c => {
+            0x100..=0x17c => {
                 let i = (offset & 0x7f) as usize;
 
                 self.fb[i / 4] = val;
@@ -43,7 +49,7 @@ impl Lcd {
         match offset {
             0 => self.mode as u32,
             4 => self.calibration as u32,
-            0x100...0x17c => {
+            0x100..=0x17c => {
                 let i = (offset & 0x7f) as usize;
 
                 self.fb[i / 4]

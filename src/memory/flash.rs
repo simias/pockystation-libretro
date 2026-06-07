@@ -1,4 +1,3 @@
-use rustc_serialize::{Decodable, Encodable, Decoder, Encoder};
 use crate::box_array::BoxArray;
 
 use super::Addressable;
@@ -45,7 +44,6 @@ impl Flash {
     }
 
     pub fn load_config<A: Addressable>(&self, offset: u32) -> u32 {
-
         match offset {
             // The BIOS expects bit 0 to be set, otherwise it gets
             // stuck in a strang loop waiting for R0 to become 1 (but
@@ -63,7 +61,7 @@ impl Flash {
             0x0c => self.f_wait1 as u32,
             0x10 => (self.f_wait2 | 4) as u32,
             0x08 => self.phys_bank_en as u32,
-            0x100...0x13c => {
+            0x100..=0x13c => {
                 let phys_bank = (offset & 0x3f) >> 2;
 
                 self.phys_to_virt_bank[phys_bank as usize] as u32
@@ -80,16 +78,15 @@ impl Flash {
     }
 
     pub fn store_config<A: Addressable>(&mut self, offset: u32, val: u32) {
-
         match offset {
-            0x00 => self.set_f_ctrl::<A>(val),
+            0x00 => self.set_f_ctrl(val),
             0x08 => {
                 self.phys_bank_en = val as u16;
                 self.rebuild_virt_mapping();
             }
             0x0c => self.f_wait1 = val as u8,
             0x10 => self.f_wait2 = val as u8,
-            0x100...0x13c => {
+            0x100..=0x13c => {
                 let phys_bank = (offset & 0x3f) >> 2;
                 let virt_bank = val & 0xf;
 
@@ -146,7 +143,7 @@ impl Flash {
     }
 
     pub fn data(&self) -> &[u8; FLASH_SIZE] {
-        &*self.data
+        &self.data
     }
 
     pub fn set_data(&mut self, mut data: Vec<u8>) {
@@ -154,7 +151,7 @@ impl Flash {
         self.data = BoxArray::from_vec(data);
     }
 
-    fn set_f_ctrl<A: Addressable>(&mut self, val: u32) {
+    fn set_f_ctrl(&mut self, val: u32) {
         self.f_ctrl = val as u8;
 
         if val == 0x03 {
@@ -175,11 +172,11 @@ impl Flash {
             if (self.phys_bank_en & (1u16 << p)) != 0 {
                 let vbank = &mut self.virt_to_phys_bank[v as usize];
 
-                match vbank {
-                    &mut None => *vbank = Some(p as u8),
-                    &mut Some(other) =>
-                        panic!("Virtual bank {} is mapped twice: {} and {}",
-                               v, other, p)
+                match *vbank {
+                    None => *vbank = Some(p as u8),
+                    Some(other) => {
+                        panic!("Virtual bank {} is mapped twice: {} and {}", v, other, p)
+                    }
                 }
             }
         }

@@ -12,6 +12,12 @@ pub struct IrqController {
     mask: u16,
 }
 
+impl Default for IrqController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IrqController {
     pub fn new() -> IrqController {
         IrqController {
@@ -58,16 +64,15 @@ impl IrqController {
             panic!("Unhandled {}bit IRQ store", A::size() * 8);
         }
 
-        let r =
-            match offset {
-                // Interrupt latch
-                0x00 => self.latch,
-                // Interrupt input
-                0x04 => self.raw,
-                // Interrupt mask
-                0x08 => self.mask,
-                _ => panic!("Unhandled IRQ register {:x}", offset),
-            };
+        let r = match offset {
+            // Interrupt latch
+            0x00 => self.latch,
+            // Interrupt input
+            0x04 => self.raw,
+            // Interrupt mask
+            0x08 => self.mask,
+            _ => panic!("Unhandled IRQ register {:x}", offset),
+        };
 
         r as u32
     }
@@ -86,7 +91,7 @@ impl IrqController {
     pub fn set_raw_interrupt(&mut self, irq: Interrupt, level: bool) {
         let mask = 1 << (irq as u16);
 
-        if level == true {
+        if level {
             if !self.raw_interrupt(irq) {
                 // Rising edge
                 //
@@ -103,8 +108,7 @@ impl IrqController {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Interrupt {
     /// [IRQ] "action" button (the big one on the right)
     ActionButton = 0,
