@@ -1,4 +1,4 @@
-use cpu::Cpu;
+use crate::cpu::Cpu;
 
 /// Trait defining the debugger interface
 pub trait Debugger {

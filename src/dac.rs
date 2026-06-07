@@ -3,8 +3,8 @@
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 
-use memory::Addressable;
-use MASTER_CLOCK_HZ;
+use crate::memory::Addressable;
+use crate::MASTER_CLOCK_HZ;
 
 pub struct Dac {
     /// Current output sample. Not sure how many bits are used on the

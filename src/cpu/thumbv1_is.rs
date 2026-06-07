@@ -2,8 +2,8 @@
 
 use std::fmt;
 
-use debugger::Debugger;
-use memory::{Byte, HalfWord, Word};
+use crate::debugger::Debugger;
+use crate::memory::{Byte, HalfWord, Word};
 
 use super::{Cpu, RegisterIndex};
 

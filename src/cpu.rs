@@ -2,8 +2,8 @@ use std::fmt;
 use std::mem::swap;
 use std::panic;
 
-use debugger::Debugger;
-use memory::{Addressable, HalfWord, Interconnect, Word};
+use crate::debugger::Debugger;
+use crate::memory::{Addressable, HalfWord, Interconnect, Word};
 
 mod armv4_is;
 mod thumbv1_is;

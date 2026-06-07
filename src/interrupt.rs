@@ -1,4 +1,4 @@
-use memory::Addressable;
+use crate::memory::Addressable;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct IrqController {

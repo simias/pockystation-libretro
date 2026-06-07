@@ -1,9 +1,9 @@
-use dac::Dac;
-use interrupt::{Interrupt, IrqController};
-use irda::Irda;
-use lcd::Lcd;
-use rtc::Rtc;
-use timer::Timer;
+use crate::dac::Dac;
+use crate::interrupt::{Interrupt, IrqController};
+use crate::irda::Irda;
+use crate::lcd::Lcd;
+use crate::rtc::Rtc;
+use crate::timer::Timer;
 
 use self::bios::Bios;
 use self::flash::Flash;

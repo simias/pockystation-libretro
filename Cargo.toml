@@ -16,8 +16,11 @@ edition = "2015"
 build = "build.rs"
 
 [dependencies]
-shaman = "0.1.0"
 log = "0.4"
 rustc-serialize = "0.3.19"
 serde = { version = "1.0", features = ["derive"] }
 serde-big-array = "0.4"
+shaman = "0.1.0"
+
+[dev-dependencies]
+flexbuffers = "2.0"

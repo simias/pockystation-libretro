@@ -1,6 +1,6 @@
 //! LCD controller emulation
 
-use memory::Addressable;
+use crate::memory::Addressable;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Lcd {

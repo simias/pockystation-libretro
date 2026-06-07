@@ -27,5 +27,5 @@ mod version {
     include!(concat!(env!("OUT_DIR"), "/version.rs"));
 }
 
-pub use version::VERSION;
-pub use version::VERSION_CSTR;
+pub use crate::version::VERSION;
+pub use crate::version::VERSION_CSTR;

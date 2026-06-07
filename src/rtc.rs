@@ -1,9 +1,9 @@
 use std::fmt;
 
-use interrupt::{Interrupt, IrqController};
-use memory::Addressable;
+use crate::interrupt::{Interrupt, IrqController};
+use crate::memory::Addressable;
 
-use MASTER_CLOCK_HZ;
+use crate::MASTER_CLOCK_HZ;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Rtc {
