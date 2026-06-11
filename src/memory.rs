@@ -221,10 +221,10 @@ impl Interconnect {
                 _ => unimplemented(),
             },
             0x0c => match offset {
-                0x00 => println!("COM MODE 0x{:08x}", val),
-                0x08 => println!("COM DATA 0x{:08x}", val),
-                0x10 => println!("COM CTRL1 0x{:08x}", val),
-                0x18 => println!("COM CTRL2 0x{:08x}", val),
+                0x00 => debug!("COM MODE 0x{:08x}", val),
+                0x08 => debug!("COM DATA 0x{:08x}", val),
+                0x10 => debug!("COM CTRL1 0x{:08x}", val),
+                0x18 => debug!("COM CTRL2 0x{:08x}", val),
                 0x800000 => self.irda.store::<A>(0, val),
                 0x800004 => self.irda.store::<A>(4, val),
                 _ => unimplemented(),
@@ -232,14 +232,14 @@ impl Interconnect {
             0x0d => match offset {
                 0..=0x1ff => self.lcd.store::<A>(offset, val),
                 0x800000 => {
-                    println!("IOP CTRL 0x{:08x}", val);
+                    debug!("IOP CTRL 0x{:08x}", val);
                     self.iop_ctrl = val as u8;
                 }
-                0x800004 => println!("IOP STOP 0x{:08x}", val),
-                0x800008 => println!("IOP START 0x{:08x}", val),
+                0x800004 => debug!("IOP STOP 0x{:08x}", val),
+                0x800008 => debug!("IOP START 0x{:08x}", val),
                 0x800010 => self.dac.store::<A>(0, val),
                 0x800014 => self.dac.store::<A>(4, val),
-                0x800020 => println!("BATT CTRL 0x{:08x}", val),
+                0x800020 => debug!("BATT CTRL 0x{:08x}", val),
                 _ => unimplemented(),
             },
             _ => unimplemented(),

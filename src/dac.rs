@@ -120,7 +120,7 @@ pub trait Backend {
     fn push_sample(&mut self, sample: i16);
 }
 
-struct DummyBackend;
+pub struct DummyBackend;
 
 impl Backend for DummyBackend {
     fn push_sample(&mut self, _: i16) {}
