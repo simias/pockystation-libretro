@@ -3,7 +3,7 @@ use std::net::TcpListener;
 use pockystation::debugger::Debugger as DebuggerInterface;
 
 use self::gdb::GdbRemote;
-use pockystation::cpu::Cpu;
+use pockystation::PocketStation;
 
 mod gdb;
 
@@ -50,7 +50,7 @@ impl Debugger {
         }
     }
 
-    fn debug(&mut self, cpu: &mut Cpu) {
+    fn debug(&mut self, pks: &mut PocketStation) {
         // If stepping was requested we can reset the flag here, this
         // way we won't "double step" if we're entering debug mode for
         // an other reason (data watchpoint for instance)
@@ -76,7 +76,7 @@ impl Debugger {
             // Inner debugger loop: handle client requests until it
             // requests that the execution resumes or an error is
             // encountered
-            if client.serve(self, cpu).is_err() {
+            if client.serve(self, pks).is_err() {
                 // We encountered an error with the remote client: we
                 // wait for a new connection
                 client = GdbRemote::new(&self.listener);
@@ -151,32 +151,32 @@ impl DebuggerInterface for Debugger {
     /// Called by the CPU when it's about to execute a new
     /// instruction. This function is called before *all* CPU
     /// instructions so it needs to be as fast as possible.
-    fn pc_change(&mut self, cpu: &mut Cpu) {
+    fn pc_change(&mut self, pks: &mut PocketStation) {
         // Check if stepping was requested or if we encountered a
         // breakpoint
-        if self.step || self.breakpoints.contains(&cpu.current_pc()) {
-            self.debug(cpu);
+        if self.step || self.breakpoints.contains(&pks.cpu.current_pc()) {
+            self.debug(pks);
         }
     }
 
     /// Called by the CPU when it's about to load a value from memory.
-    fn memory_read(&mut self, cpu: &mut Cpu, addr: u32) {
+    fn memory_read(&mut self, pks: &mut PocketStation, addr: u32) {
         // XXX: how should we handle unaligned watchpoints? For
         // instance if we have a watchpoint on address 1 and the CPU
         // executes a `load32 at` address 0, should we break? Also,
         // should we mask the region?
         if self.read_watchpoints.contains(&addr) {
             info!("Read watchpoint triggered at 0x{:08x}", addr);
-            self.debug(cpu);
+            self.debug(pks);
         }
     }
 
     /// Called by the CPU when it's about to write a value to memory.
-    fn memory_write(&mut self, cpu: &mut Cpu, addr: u32) {
+    fn memory_write(&mut self, pks: &mut PocketStation, addr: u32) {
         // XXX: same remark as memory_read for unaligned stores
         if self.write_watchpoints.contains(&addr) {
             info!("Write watchpoint triggered at 0x{:08x}", addr);
-            self.debug(cpu);
+            self.debug(pks);
         }
     }
 }

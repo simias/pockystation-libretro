@@ -2,8 +2,7 @@ use std::fmt;
 use std::mem::swap;
 use std::panic;
 
-use crate::debugger::Debugger;
-use crate::memory::{Addressable, HalfWord, Interconnect, Word};
+use crate::{HalfWord, PocketStation, Word};
 
 mod armv4_is;
 mod thumbv1_is;
@@ -45,15 +44,13 @@ pub struct Cpu {
     fiq_en: bool,
     /// Saved program status register
     spsr: u32,
-    /// Interconnect to the memory
-    inter: Interconnect,
     /// If `true` we trigger the debugger when a `bkpt` instruction is
     /// encountered
     debug_on_bkpt: bool,
 }
 
 impl Cpu {
-    pub fn new(inter: Interconnect) -> Cpu {
+    pub fn new() -> Cpu {
         let mut cpu = Cpu {
             // condition flags and general purpose registers are
             // undefined on reset
@@ -77,7 +74,6 @@ impl Cpu {
             // FIQs disabled on reset
             fiq_en: false,
             spsr: 0,
-            inter,
             debug_on_bkpt: false,
         };
 
@@ -96,8 +92,6 @@ impl Cpu {
     }
 
     pub fn reset(&mut self) {
-        self.inter.reset();
-
         self.thumb = false;
 
         self.irq_en = false;
@@ -107,78 +101,6 @@ impl Cpu {
 
         // Jump to reset vector
         self.set_pc(0);
-    }
-
-    /// Run CPU for `master_ticks` master clock periods
-    pub fn run_ticks<D: Debugger>(&mut self, debugger: &mut D, master_ticks: u32) {
-        while self.inter.frame_ticks() < master_ticks {
-            self.run_next_instruction(debugger);
-        }
-
-        self.inter.set_frame_ticks(0);
-    }
-
-    pub fn run_next_instruction<D>(&mut self, debugger: &mut D)
-    where
-        D: Debugger,
-    {
-        // Assume each instruction takes exactly one CPU cycle for
-        // now, a gross oversimplification...
-        self.inter.tick(1);
-
-        if self.inter.irq_controller().pending() {
-            // FIQs have a high priority than IRQs, so check for them
-            // first
-            if self.fiq_en && self.inter.irq_controller().fiq_pending() {
-                self.fiq();
-            } else if self.irq_en && self.inter.irq_controller().irq_pending() {
-                self.irq();
-            }
-        }
-
-        let pc = self.next_pc;
-
-        self.next_pc = self.registers[15];
-
-        debugger.pc_change(self);
-
-        if self.thumb {
-            // In Thumb mode the PC register (R15) always points to
-            // the current instruction's addres + 4 or unpredictable
-            // depending on how it's used.
-            self.registers[15] += 2;
-
-            if pc & 1 != 0 {
-                panic!("Misaligned PC! {:?}", self);
-            }
-
-            let instruction = self.inter.load::<HalfWord>(pc) as u16;
-
-            thumbv1_is::execute(self, debugger, instruction);
-        } else {
-            // In ARM mode the PC register (R15) always points to the
-            // current instruction's addres + 8, except for STR/STM
-            // instructions that store R15 where it's implementation
-            // whether it's +8 or +12. I need to check which it is for the
-            // ARM7TDMI used in the PocketStation.
-            self.registers[15] += 4;
-
-            if pc & 3 != 0 {
-                panic!("Misaligned PC! {:?}", self);
-            }
-
-            let instruction = self.inter.load::<Word>(pc);
-
-            armv4_is::execute(self, debugger, instruction);
-        }
-    }
-
-    pub fn interconnect(&self) -> &Interconnect {
-        &self.inter
-    }
-
-    pub fn interconnect_mut(&mut self) -> &mut Interconnect {
-        &mut self.inter
     }
 
     fn n(&self) -> bool {
@@ -489,55 +411,6 @@ impl Cpu {
             self.n = (flags & 8) != 0;
         }
     }
-
-    /// Load a memory location without side-effect, useful for
-    /// debugging.
-    pub fn examine<A: Addressable>(&self, addr: u32) -> u32 {
-        // Catch panics (probably caused by unimplemented memory
-        // regions). We don't want to crash the code if the debugger
-        // reads from a weird address.
-        //
-        // XXX Remove that when the entire address space is
-        // implemented.
-        let r = panic::catch_unwind(panic::AssertUnwindSafe(|| self.inter.load::<A>(addr)));
-
-        r.unwrap_or(0xbadbadbd)
-    }
-
-    fn load<A>(&mut self, debugger: &mut dyn Debugger, addr: u32) -> u32
-    where
-        A: Addressable,
-    {
-        debugger.memory_read(self, addr);
-
-        let align = (A::size() - 1) as u32;
-
-        if addr & align != 0 {
-            panic!("Unaligned load{}! 0x{:08x} {:?}", A::size() * 8, addr, self);
-        }
-
-        self.inter.load::<A>(addr)
-    }
-
-    fn store<A>(&mut self, debugger: &mut dyn Debugger, addr: u32, val: u32)
-    where
-        A: Addressable,
-    {
-        debugger.memory_write(self, addr);
-
-        let align = (A::size() - 1) as u32;
-
-        if (addr & align) != 0 {
-            panic!(
-                "Unaligned store{}! 0x{:08x} {:?}",
-                A::size() * 8,
-                addr,
-                self
-            );
-        }
-
-        self.inter.store::<A>(addr, val);
-    }
 }
 
 impl fmt::Debug for Cpu {
@@ -641,5 +514,58 @@ impl Mode {
 
     fn has_spsr(self) -> bool {
         self != Mode::User && self != Mode::System
+    }
+}
+
+pub(crate) fn run_next_instruction(pks: &mut PocketStation)
+{
+    // Assume each instruction takes exactly one CPU cycle for
+    // now, a gross oversimplification...
+    pks.tick(1);
+
+    if pks.irq_controller.pending() {
+        // FIQs have a high priority than IRQs, so check for them
+        // first
+        if pks.cpu.fiq_en && pks.irq_controller.fiq_pending() {
+            pks.cpu.fiq();
+        } else if pks.cpu.irq_en && pks.irq_controller.irq_pending() {
+            pks.cpu.irq();
+        }
+    }
+
+    let pc = pks.cpu.next_pc;
+
+    pks.cpu.next_pc = pks.cpu.registers[15];
+
+    pks.with_debugger(|pks, d| d.pc_change(pks));
+
+    if pks.cpu.thumb {
+        // In Thumb mode the PC register (R15) always points to
+        // the current instruction's address + 4 or unpredictable
+        // depending on how it's used.
+        pks.cpu.registers[15] += 2;
+
+        if pc & 1 != 0 {
+            panic!("Misaligned PC! {:?}", pks.cpu);
+        }
+
+        let instruction = pks.load::<HalfWord>(pc) as u16;
+
+        thumbv1_is::execute(pks, instruction);
+    } else {
+        // In ARM mode the PC register (R15) always points to the
+        // current instruction's address + 8, except for STR/STM
+        // instructions that store R15 where it's implementation
+        // whether it's +8 or +12. I need to check which it is for the
+        // ARM7TDMI used in the PocketStation.
+        pks.cpu.registers[15] += 4;
+
+        if pc & 3 != 0 {
+            panic!("Misaligned PC! {:?}", pks.cpu);
+        }
+
+        let instruction = pks.load::<Word>(pc);
+
+        armv4_is::execute(pks, instruction);
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 
+use crate::Addressable;
 use crate::interrupt::{Interrupt, IrqController};
-use crate::memory::Addressable;
 
 use crate::MASTER_CLOCK_HZ;
 

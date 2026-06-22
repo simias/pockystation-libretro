@@ -9,15 +9,12 @@ use std::path::{Path, PathBuf};
 
 use libc::c_char;
 
-use pockystation::cpu::Cpu;
-use pockystation::dac;
-use pockystation::dac::Dac;
+use pockystation::bios::{Bios, BIOS_SIZE};
+use pockystation::flash::{Flash, FLASH_SIZE};
 use pockystation::interrupt::Interrupt;
-use pockystation::memory::bios::{Bios, BIOS_SIZE};
-use pockystation::memory::flash::{Flash, FLASH_SIZE};
-use pockystation::memory::{Byte, Interconnect};
 use pockystation::rtc::Bcd;
 use pockystation::MASTER_CLOCK_HZ;
+use pockystation::{dac, dac::Dac, Byte, PocketStation};
 
 use crate::debugger::Debugger;
 
@@ -53,10 +50,8 @@ const SYSTEM_AV_INFO: libretro::SystemAvInfo = libretro::SystemAvInfo {
 };
 
 struct Context {
-    /// Pockystation CPU instance holding all the emulated state
-    cpu: Cpu,
-    /// Debugger instance
-    debugger: Debugger,
+    /// Pockystation instance holding all the emulated state
+    pks: PocketStation,
     /// If true the emulated RTC is periodically synchronized with the
     /// host clock.
     rtc_host_sync: bool,
@@ -80,11 +75,10 @@ impl Context {
             return Err(());
         }
 
-        let cpu = Context::load(flash)?;
+        let pks = Context::load(flash)?;
 
         let mut context = Context {
-            cpu,
-            debugger: Debugger::new(),
+            pks,
             lcd_rotation_en: true,
             rtc_host_sync: false,
             rtc_sync_counter: 0,
@@ -94,13 +88,13 @@ impl Context {
         libretro::Context::refresh_variables(&mut context);
 
         if CoreVariables::debug_on_reset() {
-            context.trigger_break();
+            context.pks.trigger_break();
         }
 
         Ok(context)
     }
 
-    fn load(memory_card: &Path) -> Result<Cpu, ()> {
+    fn load(memory_card: &Path) -> Result<PocketStation, ()> {
         let flash = match Context::load_flash(memory_card) {
             Some(f) => f,
             None => {
@@ -119,9 +113,13 @@ impl Context {
 
         let dac = Dac::new(Box::new(AudioBackend::new()));
 
-        let inter = Interconnect::new(bios, flash, dac);
+        let mut pks = PocketStation::new(bios, flash, dac);
 
-        Ok(Cpu::new(inter))
+        let debugger = Box::new(Debugger::new());
+
+        pks.set_debugger(debugger);
+
+        Ok(pks)
     }
 
     fn load_flash(path: &Path) -> Option<Flash> {
@@ -257,7 +255,7 @@ impl Context {
 
         let mut fb = flexbuffers::FlexbufferSerializer::new();
 
-        if let Err(e) = self.cpu.serialize(&mut fb) {
+        if let Err(e) = self.pks.serialize(&mut fb) {
             error!("Couldn't serialize savestate: {}", e);
             return Err(());
         };
@@ -331,20 +329,16 @@ impl Context {
     }
 
     fn poll_controllers(&mut self) {
-        let irq_controller = self.cpu.interconnect_mut().irq_controller_mut();
-
         for &(retrobutton, irq) in &BUTTON_MAP {
             let active = libretro::button_pressed(0, retrobutton);
 
-            irq_controller.set_raw_interrupt(irq, active);
+            self.pks.irq_controller.set_raw_interrupt(irq, active);
         }
     }
 
     /// Synchronize emulated RTC with the host
     fn sync_host_rtc(&mut self) {
         let now = time::now();
-
-        let inter = self.cpu.interconnect_mut();
 
         let year = now.tm_year + 1900;
         let century = (year / 100) as u8;
@@ -353,10 +347,13 @@ impl Context {
 
         // The century is not stored in the RTC, it's stored in RAM at
         // address 0xcf. Hopefully this address is always correct...
-        inter.store::<Byte>(0xcf, century.bcd() as u32);
+        //
+        // XXX This doesn't work as expected, there must be more to it. Needs to disassemble the
+        // code to figure out how the BIOS handles it.
+        self.pks.store::<Byte>(0xcf, century.bcd() as u32);
 
         {
-            let rtc = inter.rtc_mut();
+            let rtc = &mut self.pks.rtc;
 
             // Handle leap seconds, just in case...
             let secs = match now.tm_sec {
@@ -380,11 +377,6 @@ impl Context {
             rtc.set_year(Bcd::from_binary(year).unwrap());
         }
     }
-
-    /// Trigger a breakpoint in the debugger
-    fn trigger_break(&mut self) {
-        pockystation::debugger::Debugger::trigger_break(&mut self.debugger);
-    }
 }
 
 impl libretro::Context for Context {
@@ -394,7 +386,7 @@ impl libretro::Context for Context {
         let debug_request = self.debug_on_key && libretro::key_pressed(0, libretro::Key::Pause);
 
         if debug_request {
-            self.trigger_break();
+            self.pks.trigger_break();
         }
 
         if self.rtc_host_sync {
@@ -407,9 +399,9 @@ impl libretro::Context for Context {
         }
 
         // Step for 1/60th of a second
-        self.cpu.run_ticks(&mut self.debugger, MASTER_CLOCK_HZ / 60);
+        self.pks.run_ticks(MASTER_CLOCK_HZ / 60);
 
-        let lcd = self.cpu.interconnect().lcd();
+        let lcd = &self.pks.lcd;
 
         let fb = lcd.framebuffer();
 
@@ -445,14 +437,16 @@ impl libretro::Context for Context {
         self.lcd_rotation_en = CoreVariables::lcd_rotation_en();
         self.debug_on_key = CoreVariables::debug_on_key();
 
-        self.cpu.set_debug_on_bkpt(CoreVariables::debug_on_bkpt());
+        self.pks
+            .cpu
+            .set_debug_on_bkpt(CoreVariables::debug_on_bkpt());
     }
 
     fn reset(&mut self) {
-        self.cpu.reset();
+        self.pks.reset();
 
         if CoreVariables::debug_on_reset() {
-            self.trigger_break();
+            self.pks.trigger_break();
         }
     }
 

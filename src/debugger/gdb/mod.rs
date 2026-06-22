@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
-use pockystation::cpu::Cpu;
-use pockystation::memory::{Byte, HalfWord, Word};
+use pockystation::PocketStation;
+use pockystation::{Byte, HalfWord, Word};
 
 use crate::debugger::Debugger;
 
@@ -32,11 +32,11 @@ impl GdbRemote {
     }
 
     // Serve a single remote request
-    pub fn serve(&mut self, debugger: &mut Debugger, cpu: &mut Cpu) -> GdbResult {
+    pub fn serve(&mut self, debugger: &mut Debugger, pks: &mut PocketStation) -> GdbResult {
         match self.next_packet() {
             PacketResult::Ok(packet) => {
                 self.ack()?;
-                self.handle_packet(debugger, cpu, &packet)
+                self.handle_packet(debugger, pks, &packet)
             }
             PacketResult::BadChecksum => {
                 // Request retransmission
@@ -149,7 +149,7 @@ impl GdbRemote {
     fn handle_packet(
         &mut self,
         debugger: &mut Debugger,
-        cpu: &mut Cpu,
+        pks: &mut PocketStation,
         packet: &[u8],
     ) -> GdbResult {
         let command = packet[0];
@@ -157,10 +157,10 @@ impl GdbRemote {
 
         let res = match command {
             b'?' => self.send_status(),
-            b'm' => self.read_memory(cpu, args),
-            b'g' => self.read_registers(cpu),
-            b'c' => self.resume(debugger, cpu, args),
-            b's' => self.step(debugger, cpu, args),
+            b'm' => self.read_memory(pks, args),
+            b'g' => self.read_registers(pks),
+            b'c' => self.resume(debugger, pks, args),
+            b's' => self.step(debugger, pks, args),
             b'Z' => self.add_breakpoint(debugger, args),
             b'z' => self.del_breakpoint(debugger, args),
             // Send empty response for unsupported packets
@@ -215,7 +215,7 @@ impl GdbRemote {
         self.send_string(b"OK")
     }
 
-    fn read_registers(&mut self, cpu: &mut Cpu) -> GdbResult {
+    fn read_registers(&mut self, pks: &mut PocketStation) -> GdbResult {
         let mut reply = Reply::new();
 
         // Protip: use `maintenance print remote-registers` in gdb to
@@ -223,11 +223,11 @@ impl GdbRemote {
 
         // Send general purpose registers (but not PC since the value
         // in registers() is offset by 4 or 8 bytes)
-        for &r in &cpu.registers()[0..15] {
+        for &r in &pks.cpu.registers()[0..15] {
             reply.push_u32(r);
         }
 
-        reply.push_u32(cpu.current_pc());
+        reply.push_u32(pks.cpu.current_pc());
 
         // GDB expects the FP registers next, but there's no FP
         // support on our CPU so we just reply with garbage
@@ -240,14 +240,14 @@ impl GdbRemote {
         reply.push(b"xxxxxxxx");
 
         // Finally we send the CPSR
-        reply.push_u32(cpu.cpsr());
+        reply.push_u32(pks.cpu.cpsr());
 
         self.send_reply(reply)
     }
 
     /// Read a region of memory. The packet format should be
     /// `ADDR,LEN`, both in hexadecimal
-    fn read_memory(&mut self, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
+    fn read_memory(&mut self, pks: &mut PocketStation, args: &[u8]) -> GdbResult {
         let mut reply = Reply::new();
 
         let (addr, len) = parse_addr_len(args)?;
@@ -272,7 +272,7 @@ impl GdbRemote {
                 let count = ::std::cmp::min(len, 4 - align);
 
                 for i in 0..count {
-                    let b = cpu.examine::<Byte>(addr.wrapping_add(i));
+                    let b = pks.examine::<Byte>(addr.wrapping_add(i));
                     reply.push_u8(b as u8);
                 }
                 count
@@ -280,10 +280,10 @@ impl GdbRemote {
             2 => {
                 if len == 1 {
                     // Only one byte to read
-                    reply.push_u8(cpu.examine::<Byte>(addr) as u8);
+                    reply.push_u8(pks.examine::<Byte>(addr) as u8);
                     1
                 } else {
-                    reply.push_u16(cpu.examine::<HalfWord>(addr) as u16);
+                    reply.push_u16(pks.examine::<HalfWord>(addr) as u16);
                     2
                 }
             }
@@ -301,7 +301,7 @@ impl GdbRemote {
         let nwords = len / 4;
 
         for i in 0..nwords {
-            reply.push_u32(cpu.examine::<Word>(addr + i * 4));
+            reply.push_u32(pks.examine::<Word>(addr + i * 4));
         }
 
         // See if we have anything remaining
@@ -311,12 +311,12 @@ impl GdbRemote {
         match rem {
             1 | 3 => {
                 for i in 0..rem {
-                    let b = cpu.examine::<Byte>(addr.wrapping_add(i));
+                    let b = pks.examine::<Byte>(addr.wrapping_add(i));
                     reply.push_u8(b as u8);
                 }
             }
             2 => {
-                reply.push_u16(cpu.examine::<HalfWord>(addr) as u16);
+                reply.push_u16(pks.examine::<HalfWord>(addr) as u16);
             }
             _ => (),
         }
@@ -325,12 +325,17 @@ impl GdbRemote {
     }
 
     /// Continue execution
-    fn resume(&mut self, debugger: &mut Debugger, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
+    fn resume(
+        &mut self,
+        debugger: &mut Debugger,
+        pks: &mut PocketStation,
+        args: &[u8],
+    ) -> GdbResult {
         if !args.is_empty() {
             // If an address is provided we restart from there
             let addr = parse_hex(args)?;
 
-            cpu.set_pc(addr);
+            pks.cpu.set_pc(addr);
         }
 
         // Tell the debugger we want to resume execution.
@@ -341,10 +346,10 @@ impl GdbRemote {
 
     // Step works exactly like continue except that we're only
     // supposed to execute a single instruction.
-    fn step(&mut self, debugger: &mut Debugger, cpu: &mut Cpu, args: &[u8]) -> GdbResult {
+    fn step(&mut self, debugger: &mut Debugger, pks: &mut PocketStation, args: &[u8]) -> GdbResult {
         debugger.set_step();
 
-        self.resume(debugger, cpu, args)
+        self.resume(debugger, pks, args)
     }
 
     // Add a breakpoint or watchpoint

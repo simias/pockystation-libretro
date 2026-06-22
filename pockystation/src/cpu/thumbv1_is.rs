@@ -2,18 +2,14 @@
 
 use std::fmt;
 
-use crate::debugger::Debugger;
-use crate::memory::{Byte, HalfWord, Word};
+use crate::{Byte, HalfWord, PocketStation, Word};
 
-use super::{Cpu, RegisterIndex};
+use super::RegisterIndex;
 
-pub fn execute<D>(cpu: &mut Cpu, debugger: &mut D, instruction: u16)
-where
-    D: Debugger,
-{
+pub fn execute(pks: &mut PocketStation, instruction: u16) {
     let instruction = Instruction(instruction);
 
-    instruction.execute(debugger, cpu);
+    instruction.execute(pks);
 }
 
 impl Instruction {
@@ -100,43 +96,40 @@ impl Instruction {
         (self.0 & 0xff) as u32
     }
 
-    fn adds(self, cpu: &mut Cpu, a: u32, b: u32) -> u32 {
+    fn adds(self, pks: &mut PocketStation, a: u32, b: u32) -> u32 {
         let val = a.wrapping_add(b);
 
         let a_neg = (a as i32) < 0;
         let b_neg = (b as i32) < 0;
         let v_neg = (val as i32) < 0;
 
-        cpu.set_n(v_neg);
-        cpu.set_z(val == 0);
-        cpu.set_c(val < a);
-        cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
+        pks.cpu.set_n(v_neg);
+        pks.cpu.set_z(val == 0);
+        pks.cpu.set_c(val < a);
+        pks.cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
 
         val
     }
 
-    fn subs(self, cpu: &mut Cpu, a: u32, b: u32) -> u32 {
+    fn subs(self, pks: &mut PocketStation, a: u32, b: u32) -> u32 {
         let val = a.wrapping_sub(b);
 
         let a_neg = (a as i32) < 0;
         let b_neg = (b as i32) < 0;
         let v_neg = (val as i32) < 0;
 
-        cpu.set_n(v_neg);
-        cpu.set_z(val == 0);
-        cpu.set_c(a >= b);
-        cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+        pks.cpu.set_n(v_neg);
+        pks.cpu.set_z(val == 0);
+        pks.cpu.set_c(a >= b);
+        pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 
         val
     }
 
-    fn execute<D>(self, debugger: &mut D, cpu: &mut Cpu)
-    where
-        D: Debugger,
-    {
+    fn execute(self, pks: &mut PocketStation) {
         let handler = OPCODE_LUT[self.opcode() as usize];
 
-        handler(self, debugger, cpu);
+        handler(self, pks);
     }
 }
 
@@ -150,21 +143,21 @@ impl fmt::Display for Instruction {
     }
 }
 
-fn unimplemented(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn unimplemented(instruction: Instruction, pks: &mut PocketStation) {
     panic!(
         "Unimplemented instruction {} ({:03x})\n{:?}",
         instruction,
         instruction.opcode(),
-        cpu
+        pks.cpu
     );
 }
 
-fn op00x_lsl_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op00x_lsl_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
     let shift = instruction.imm5();
 
-    let val = cpu.reg(rm);
+    let val = pks.cpu.reg(rm);
 
     let val = match shift {
         0 => val,
@@ -173,22 +166,22 @@ fn op00x_lsl_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) 
 
             let carry = (shifted & (1 << 32)) != 0;
 
-            cpu.set_c(carry);
+            pks.cpu.set_c(carry);
             shifted as u32
         }
     };
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op02x_lsr_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op02x_lsr_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
     let shift = instruction.imm5();
 
-    let val = cpu.reg(rm);
+    let val = pks.cpu.reg(rm);
 
     let (val, carry) = match shift {
         0 => {
@@ -204,18 +197,18 @@ fn op02x_lsr_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) 
         }
     };
 
-    cpu.set_reg(rd, val);
-    cpu.set_n(false);
-    cpu.set_z(val == 0);
-    cpu.set_c(carry);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n(false);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(carry);
 }
 
-fn op04x_asr_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op04x_asr_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
     let shift = instruction.imm5();
 
-    let val = cpu.reg(rm);
+    let val = pks.cpu.reg(rm);
 
     let ival = val as i32;
 
@@ -233,77 +226,77 @@ fn op04x_asr_ri5(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) 
         }
     };
 
-    cpu.set_reg(rd, ival as u32);
-    cpu.set_n(ival < 0);
-    cpu.set_z(ival == 0);
-    cpu.set_c(carry);
+    pks.cpu.set_reg(rd, ival as u32);
+    pks.cpu.set_n(ival < 0);
+    pks.cpu.set_z(ival == 0);
+    pks.cpu.set_c(carry);
 }
 
-fn op06x_add_rr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op06x_add_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
-    let val = instruction.adds(cpu, a, b);
+    let val = instruction.adds(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op06x_sub_rr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op06x_sub_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
-    let val = instruction.subs(cpu, a, b);
+    let val = instruction.subs(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op07x_add_i3(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op07x_add_i3(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let b = instruction.imm3();
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
-    let val = instruction.adds(cpu, a, b);
+    let val = instruction.adds(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op07x_sub_i3(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op07x_sub_i3(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let b = instruction.imm3();
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
-    let val = instruction.subs(cpu, a, b);
+    let val = instruction.subs(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op08x_mov_i8(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op08x_mov_i8(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let val = instruction.imm8();
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op0ax_cmp_i8(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op0ax_cmp_i8(instruction: Instruction, pks: &mut PocketStation) {
     let rn = instruction.reg_8();
     let b = instruction.imm8();
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
@@ -311,69 +304,69 @@ fn op0ax_cmp_i8(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(a >= b);
-    cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(a >= b);
+    pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn op0cx_add_i8(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op0cx_add_i8(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let b = instruction.imm8();
 
-    let a = cpu.reg(rd);
+    let a = pks.cpu.reg(rd);
 
-    let val = instruction.adds(cpu, a, b);
+    let val = instruction.adds(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op0ex_sub_i8(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op0ex_sub_i8(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let b = instruction.imm8();
 
-    let a = cpu.reg(rd);
+    let a = pks.cpu.reg(rd);
 
-    let val = instruction.subs(cpu, a, b);
+    let val = instruction.subs(pks, a, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op100_and(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op100_and(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     let val = a & b;
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op101_eor(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op101_eor(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     let val = a ^ b;
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op102_lsl_r(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op102_lsl_r(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rs = instruction.reg_3();
 
-    let shift = cpu.reg(rs) & 0xff;
+    let shift = pks.cpu.reg(rs) & 0xff;
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
     let val = match shift {
         0 => val,
@@ -382,255 +375,255 @@ fn op102_lsl_r(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
 
             let carry = (shifted & (1 << 32)) != 0;
 
-            cpu.set_c(carry);
+            pks.cpu.set_c(carry);
             shifted as u32
         }
         32 => {
-            cpu.set_c((val & 1) != 0);
+            pks.cpu.set_c((val & 1) != 0);
 
             0
         }
         _ => {
-            cpu.set_c(false);
+            pks.cpu.set_c(false);
 
             0
         }
     };
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op103_lsr_r(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op103_lsr_r(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rs = instruction.reg_3();
 
-    let shift = cpu.reg(rs) & 0xff;
+    let shift = pks.cpu.reg(rs) & 0xff;
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
     let val = match shift {
         0 => val,
         1..=31 => {
             let carry = (val & (1 << (shift - 1))) != 0;
 
-            cpu.set_c(carry);
+            pks.cpu.set_c(carry);
 
             val >> shift
         }
         32 => {
-            cpu.set_c((val as i32) < 0);
+            pks.cpu.set_c((val as i32) < 0);
 
             0
         }
         _ => {
-            cpu.set_c(false);
+            pks.cpu.set_c(false);
 
             0
         }
     };
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op104_asr_r(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op104_asr_r(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rs = instruction.reg_3();
 
-    let shift = cpu.reg(rs) & 0xff;
-    let val = cpu.reg(rd);
+    let shift = pks.cpu.reg(rs) & 0xff;
+    let val = pks.cpu.reg(rd);
 
     let val = match shift {
         0 => val,
         1..=31 => {
             let carry = (val >> (shift - 1)) & 1 != 0;
 
-            cpu.set_c(carry);
+            pks.cpu.set_c(carry);
             ((val as i32) >> shift) as u32
         }
         _ => {
             let carry = (val >> 31) & 1 != 0;
 
-            cpu.set_c(carry);
+            pks.cpu.set_c(carry);
             ((val as i32) >> 31) as u32
         }
     };
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op105_adc_rr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op105_adc_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     // Add with carry
-    let val = a.wrapping_add(b).wrapping_add(cpu.c() as u32);
+    let val = a.wrapping_add(b).wrapping_add(pks.cpu.c() as u32);
 
     let a_neg = (a as i32) < 0;
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(val < a);
-    cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(val < a);
+    pks.cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
 }
 
-fn op107_ror(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op107_ror(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rs = instruction.reg_3();
 
-    let rot = cpu.reg(rs);
-    let val = cpu.reg(rd);
+    let rot = pks.cpu.reg(rs);
+    let val = pks.cpu.reg(rd);
 
     let val = if (rot & 0xff) == 0 {
         val
     } else if (rot & 0x1f) == 0 {
         let carry = (val >> 31) & 1 != 0;
 
-        cpu.set_c(carry);
+        pks.cpu.set_c(carry);
         val
     } else {
         let rot = rot & 0x1f;
 
         let carry = (val >> (rot - 1)) & 1 != 0;
 
-        cpu.set_c(carry);
+        pks.cpu.set_c(carry);
         val.rotate_right(rot)
     };
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op108_tst(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op108_tst(instruction: Instruction, pks: &mut PocketStation) {
     let rn = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
     let val = a & b;
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op109_neg(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op109_neg(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let b = cpu.reg(rm);
+    let b = pks.cpu.reg(rm);
 
-    let val = instruction.subs(cpu, 0, b);
+    let val = instruction.subs(pks, 0, b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op10a_cmp(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10a_cmp(instruction: Instruction, pks: &mut PocketStation) {
     let rn = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
-    instruction.subs(cpu, a, b);
+    instruction.subs(pks, a, b);
 }
 
-fn op10b_cmn(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10b_cmn(instruction: Instruction, pks: &mut PocketStation) {
     let rn = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
-    instruction.adds(cpu, a, b);
+    instruction.adds(pks, a, b);
 }
 
-fn op10c_orr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10c_orr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     let val = a | b;
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op10d_mul(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10d_mul(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     let val = a.wrapping_mul(b);
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op10e_bic(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10e_bic(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let val = cpu.reg(rd) & !cpu.reg(rm);
+    let val = pks.cpu.reg(rd) & !pks.cpu.reg(rm);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op10f_mvn(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op10f_mvn(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rm = instruction.reg_3();
 
-    let val = !cpu.reg(rm);
+    let val = !pks.cpu.reg(rm);
 
-    cpu.set_reg(rd, val);
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
+    pks.cpu.set_reg(rd, val);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
 }
 
-fn op111_add_hi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op111_add_hi(instruction: Instruction, pks: &mut PocketStation) {
     let rm = instruction.reg_3_full();
     let rd = instruction.reg_0_full();
 
-    let a = cpu.reg(rd);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rd);
+    let b = pks.cpu.reg(rm);
 
     let val = a.wrapping_add(b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op115_cmp_hi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op115_cmp_hi(instruction: Instruction, pks: &mut PocketStation) {
     let rn = instruction.reg_0_full();
     let rm = instruction.reg_3_full();
 
-    let a = cpu.reg(rn);
-    let b = cpu.reg(rm);
+    let a = pks.cpu.reg(rn);
+    let b = pks.cpu.reg(rm);
 
-    instruction.subs(cpu, a, b);
+    instruction.subs(pks, a, b);
 }
 
-fn op11c_bx(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op11c_bx(instruction: Instruction, pks: &mut PocketStation) {
     let rm = instruction.reg_3_full();
 
     if (instruction.0 & 7) != 0 {
@@ -638,287 +631,287 @@ fn op11c_bx(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
         panic!("Invalid BX instruction {}", instruction);
     }
 
-    let target = cpu.reg(rm);
+    let target = pks.cpu.reg(rm);
 
     let thumb = (target & 1) != 0;
 
-    cpu.set_pc_thumb(target & !1, thumb);
+    pks.cpu.set_pc_thumb(target & !1, thumb);
 }
 
 /// Also known as MOV(3)
-fn op118_cpy(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op118_cpy(instruction: Instruction, pks: &mut PocketStation) {
     let rm = instruction.reg_3_full();
     let rd = instruction.reg_0_full();
 
-    let val = cpu.reg(rm);
+    let val = pks.cpu.reg(rm);
 
     let val = if rd.is_pc() { val & !1 } else { val };
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op12x_ldr_pc(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op12x_ldr_pc(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let offset = instruction.imm8() << 2;
 
-    let base = cpu.reg(RegisterIndex(15)) & !3;
+    let base = pks.cpu.reg(RegisterIndex(15)) & !3;
 
     let addr = base.wrapping_add(offset);
 
-    let val = cpu.load::<Word>(debugger, addr);
+    let val = pks.load::<Word>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op14x_str_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op14x_str_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Word>(debugger, addr, val);
+    pks.store::<Word>(addr, val);
 }
 
-fn op14x_strh_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op14x_strh_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
     if (addr & 1) != 0 {
         panic!("Unpredictable STRH");
     }
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<HalfWord>(debugger, addr, val);
+    pks.store::<HalfWord>(addr, val);
 }
 
-fn op15x_strb_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op15x_strb_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Byte>(debugger, addr, val);
+    pks.store::<Byte>(addr, val);
 }
 
-fn op15x_ldrsb_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op15x_ldrsb_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.load::<Byte>(debugger, addr) as i8;
+    let val = pks.load::<Byte>(addr) as i8;
 
-    cpu.set_reg(rd, val as u32);
+    pks.cpu.set_reg(rd, val as u32);
 }
 
-fn op16x_ldr_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op16x_ldr_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.load::<Word>(debugger, addr);
+    let val = pks.load::<Word>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op16x_ldrh_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op16x_ldrh_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.load::<HalfWord>(debugger, addr);
+    let val = pks.load::<HalfWord>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op17x_ldrb_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op17x_ldrb_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.load::<Byte>(debugger, addr);
+    let val = pks.load::<Byte>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op17x_ldrsh_rr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op17x_ldrsh_rr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let rm = instruction.reg_6();
 
-    let addr = cpu.reg(rn).wrapping_add(cpu.reg(rm));
+    let addr = pks.cpu.reg(rn).wrapping_add(pks.cpu.reg(rm));
 
-    let val = cpu.load::<HalfWord>(debugger, addr) as i16;
+    let val = pks.load::<HalfWord>(addr) as i16;
 
-    cpu.set_reg(rd, val as u32);
+    pks.cpu.set_reg(rd, val as u32);
 }
 
-fn op18x_str_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op18x_str_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5() << 2;
 
-    let base = cpu.reg(rn);
+    let base = pks.cpu.reg(rn);
 
     let addr = base.wrapping_add(offset);
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Word>(debugger, addr, val);
+    pks.store::<Word>(addr, val);
 }
 
-fn op1ax_ldr_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op1ax_ldr_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5() << 2;
 
-    let base = cpu.reg(rn);
+    let base = pks.cpu.reg(rn);
 
     let addr = base.wrapping_add(offset);
 
-    let val = cpu.load::<Word>(debugger, addr);
+    let val = pks.load::<Word>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op1cx_strb_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op1cx_strb_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5();
 
-    let addr = cpu.reg(rn).wrapping_add(offset);
+    let addr = pks.cpu.reg(rn).wrapping_add(offset);
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Byte>(debugger, addr, val);
+    pks.store::<Byte>(addr, val);
 }
 
-fn op1ex_ldrb_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op1ex_ldrb_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5();
 
-    let addr = cpu.reg(rn).wrapping_add(offset);
+    let addr = pks.cpu.reg(rn).wrapping_add(offset);
 
-    let val = cpu.load::<Byte>(debugger, addr);
+    let val = pks.load::<Byte>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op20x_strh_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op20x_strh_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5() << 1;
 
-    let addr = cpu.reg(rn).wrapping_add(offset);
+    let addr = pks.cpu.reg(rn).wrapping_add(offset);
 
     if (addr & 1) != 0 {
         panic!("Unpredictable STRH");
     }
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<HalfWord>(debugger, addr, val);
+    pks.store::<HalfWord>(addr, val);
 }
 
-fn op22x_ldrh_ri5(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op22x_ldrh_ri5(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_0();
     let rn = instruction.reg_3();
     let offset = instruction.imm5() << 1;
 
-    let addr = cpu.reg(rn).wrapping_add(offset);
+    let addr = pks.cpu.reg(rn).wrapping_add(offset);
 
-    let val = cpu.load::<HalfWord>(debugger, addr);
+    let val = pks.load::<HalfWord>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op24x_str_sp(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op24x_str_sp(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let imm = instruction.imm8() << 2;
 
     let sp = RegisterIndex(13);
 
-    let addr = cpu.reg(sp).wrapping_add(imm);
+    let addr = pks.cpu.reg(sp).wrapping_add(imm);
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Word>(debugger, addr, val);
+    pks.store::<Word>(addr, val);
 }
 
-fn op26x_ldr_sp(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op26x_ldr_sp(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let imm = instruction.imm8() << 2;
 
     let sp = RegisterIndex(13);
 
-    let addr = cpu.reg(sp).wrapping_add(imm);
+    let addr = pks.cpu.reg(sp).wrapping_add(imm);
 
-    let val = cpu.load::<Word>(debugger, addr);
+    let val = pks.load::<Word>(addr);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn op28x_add_pc(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op28x_add_pc(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let offset = instruction.imm8() << 2;
 
     let pc = RegisterIndex(15);
 
-    let val = cpu.reg(pc).wrapping_add(offset);
+    let val = pks.cpu.reg(pc).wrapping_add(offset);
 
-    cpu.set_reg(rd, val & !3);
+    pks.cpu.set_reg(rd, val & !3);
 }
 
-fn op2ax_add_sp_i(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2ax_add_sp_i(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.reg_8();
     let offset = instruction.imm8() << 2;
 
     let sp = RegisterIndex(13);
 
-    let val = cpu.reg(sp);
+    let val = pks.cpu.reg(sp);
 
-    cpu.set_reg(rd, val.wrapping_add(offset));
+    pks.cpu.set_reg(rd, val.wrapping_add(offset));
 }
 
-fn op2c0_add_sp(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2c0_add_sp(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.imm7() << 2;
 
     let sp = RegisterIndex(13);
 
-    let val = cpu.reg(sp);
+    let val = pks.cpu.reg(sp);
 
-    cpu.set_reg(sp, val.wrapping_add(offset));
+    pks.cpu.set_reg(sp, val.wrapping_add(offset));
 }
 
-fn op2c2_sub_sp(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2c2_sub_sp(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.imm7() << 2;
 
     let sp = RegisterIndex(13);
 
-    let val = cpu.reg(sp);
+    let val = pks.cpu.reg(sp);
 
-    cpu.set_reg(sp, val.wrapping_sub(offset));
+    pks.cpu.set_reg(sp, val.wrapping_sub(offset));
 }
 
-fn op2d0_push(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2d0_push(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
 
     // Push are SP-relative
@@ -930,7 +923,7 @@ fn op2d0_push(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut C
         panic!("Unpredictable PUSH {}", instruction);
     }
 
-    let start_addr = cpu.reg(sp).wrapping_sub(4 * num_regs);
+    let start_addr = pks.cpu.reg(sp).wrapping_sub(4 * num_regs);
 
     let mut addr = start_addr;
 
@@ -938,17 +931,17 @@ fn op2d0_push(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut C
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.reg(reg);
-            cpu.store::<Word>(debugger, addr, val);
+            let val = pks.cpu.reg(reg);
+            pks.store::<Word>(addr, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 
-    cpu.set_reg(sp, start_addr);
+    pks.cpu.set_reg(sp, start_addr);
 }
 
-fn op2d4_push_lr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2d4_push_lr(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
 
     // Push are SP-relative
@@ -957,7 +950,7 @@ fn op2d4_push_lr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mu
     // Register list + LR
     let num_regs = list.count_ones() + 1;
 
-    let start_addr = cpu.reg(sp).wrapping_sub(4 * num_regs);
+    let start_addr = pks.cpu.reg(sp).wrapping_sub(4 * num_regs);
 
     let mut addr = start_addr;
 
@@ -965,21 +958,21 @@ fn op2d4_push_lr(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mu
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.reg(reg);
-            cpu.store::<Word>(debugger, addr, val);
+            let val = pks.cpu.reg(reg);
+            pks.store::<Word>(addr, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 
     // Push LR
-    let lr = cpu.reg(RegisterIndex(14));
-    cpu.store::<Word>(debugger, addr, lr);
+    let lr = pks.cpu.reg(RegisterIndex(14));
+    pks.store::<Word>(addr, lr);
 
-    cpu.set_reg(sp, start_addr);
+    pks.cpu.set_reg(sp, start_addr);
 }
 
-fn op2f0_pop(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2f0_pop(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
 
     // Pop are SP-relative
@@ -991,56 +984,56 @@ fn op2f0_pop(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cp
         panic!("Unpredictable PUSH {}", instruction);
     }
 
-    let mut addr = cpu.reg(sp);
+    let mut addr = pks.cpu.reg(sp);
 
     for i in 0..8 {
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.load::<Word>(debugger, addr);
+            let val = pks.load::<Word>(addr);
 
-            cpu.set_reg(reg, val);
+            pks.cpu.set_reg(reg, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 
-    cpu.set_reg(sp, addr);
+    pks.cpu.set_reg(sp, addr);
 }
 
-fn op2f4_pop_pc(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op2f4_pop_pc(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
 
     // Pop are SP-relative
     let sp = RegisterIndex(13);
 
-    let mut addr = cpu.reg(sp);
+    let mut addr = pks.cpu.reg(sp);
 
     for i in 0..8 {
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.load::<Word>(debugger, addr);
+            let val = pks.load::<Word>(addr);
 
-            cpu.set_reg(reg, val);
+            pks.cpu.set_reg(reg, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 
     // Load PC
-    let pc = cpu.load::<Word>(debugger, addr);
-    cpu.set_pc(pc & !1);
+    let pc = pks.load::<Word>(addr);
+    pks.cpu.set_pc(pc & !1);
     addr = addr.wrapping_add(4);
 
-    cpu.set_reg(sp, addr);
+    pks.cpu.set_reg(sp, addr);
 }
 
-fn op30x_stmia(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op30x_stmia(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
     let rn = instruction.reg_8();
 
-    let mut addr = cpu.reg(rn);
+    let mut addr = pks.cpu.reg(rn);
 
     let mut first = true;
 
@@ -1055,176 +1048,176 @@ fn op30x_stmia(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut 
                 panic!("Unpredictable STM! {}", instruction);
             }
 
-            let val = cpu.reg(reg);
-            cpu.store::<Word>(debugger, addr, val);
+            let val = pks.cpu.reg(reg);
+            pks.store::<Word>(addr, val);
 
             addr = addr.wrapping_add(4);
             first = false;
         }
     }
 
-    cpu.set_reg(rn, addr);
+    pks.cpu.set_reg(rn, addr);
 }
 
-fn op32x_ldmia(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op32x_ldmia(instruction: Instruction, pks: &mut PocketStation) {
     let list = instruction.register_list();
     let rn = instruction.reg_8();
 
     let num_regs = list.count_ones();
-    let mut addr = cpu.reg(rn);
+    let mut addr = pks.cpu.reg(rn);
 
     // If Rn is present in the list the final value is the loaded
     // value, not the writeback.
     let end_address = addr + 4 * num_regs;
 
-    cpu.set_reg(rn, end_address);
+    pks.cpu.set_reg(rn, end_address);
 
     for i in 0..8 {
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.load::<Word>(debugger, addr);
+            let val = pks.load::<Word>(addr);
 
-            cpu.set_reg(reg, val);
+            pks.cpu.set_reg(reg, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 }
 
-fn op340_beq(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op340_beq(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.z() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.z() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op344_bne(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op344_bne(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if !cpu.z() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if !pks.cpu.z() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op348_bcs(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op348_bcs(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.c() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.c() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op34c_bcc(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op34c_bcc(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if !cpu.c() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if !pks.cpu.c() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op350_bmi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op350_bmi(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.n() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.n() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op354_bpl(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op354_bpl(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if !cpu.n() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if !pks.cpu.n() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op360_bhi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op360_bhi(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.c() && !cpu.z() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.c() && !pks.cpu.z() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op364_bls(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op364_bls(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if !cpu.c() || cpu.z() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if !pks.cpu.c() || pks.cpu.z() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op368_bge(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op368_bge(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.n() == cpu.v() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.n() == pks.cpu.v() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op36c_blt(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op36c_blt(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.n() != cpu.v() {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.n() != pks.cpu.v() {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op370_bgt(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op370_bgt(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if !cpu.z() && (cpu.n() == cpu.v()) {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if !pks.cpu.z() && (pks.cpu.n() == pks.cpu.v()) {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op374_ble(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op374_ble(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm8() << 1;
 
-    if cpu.z() || (cpu.n() != cpu.v()) {
-        let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    if pks.cpu.z() || (pks.cpu.n() != pks.cpu.v()) {
+        let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-        cpu.set_pc(pc);
+        pks.cpu.set_pc(pc);
     }
 }
 
-fn op37c_swi(_: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
-    cpu.swi()
+fn op37c_swi(_: Instruction, pks: &mut PocketStation) {
+    pks.cpu.swi()
 }
 
-fn op38x_b(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op38x_b(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.signed_imm11() << 1;
 
-    let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-    cpu.set_pc(pc);
+    pks.cpu.set_pc(pc);
 }
 
-fn op3cx_bl_hi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op3cx_bl_hi(instruction: Instruction, pks: &mut PocketStation) {
     // This instruction is coded on two successive half words. The
     // reference manual says that it's implementation defined
     // whether interrupts can happen between the two
@@ -1238,25 +1231,25 @@ fn op3cx_bl_hi(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
 
     // The offset is based on the value of the PC register during
     // the 1st instruction
-    let partial_target = cpu.reg(RegisterIndex(15)).wrapping_add(offset_hi);
+    let partial_target = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset_hi);
 
     // The partial target branch is stored in RL
-    cpu.set_reg(RegisterIndex(14), partial_target)
+    pks.cpu.set_reg(RegisterIndex(14), partial_target)
 }
 
-fn op3ex_bl_lo(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn op3ex_bl_lo(instruction: Instruction, pks: &mut PocketStation) {
     let offset_lo = instruction.b_imm_offset_11() << 1;
 
-    let target = cpu.reg(RegisterIndex(14)).wrapping_add(offset_lo);
+    let target = pks.cpu.reg(RegisterIndex(14)).wrapping_add(offset_lo);
 
-    let ra = cpu.next_pc | 1;
+    let ra = pks.cpu.next_pc | 1;
 
-    cpu.set_reg(RegisterIndex(14), ra);
+    pks.cpu.set_reg(RegisterIndex(14), ra);
 
-    cpu.set_pc(target);
+    pks.cpu.set_pc(target);
 }
 
-static OPCODE_LUT: [fn(Instruction, &mut dyn Debugger, &mut Cpu); 1024] = [
+static OPCODE_LUT: [fn(Instruction, &mut PocketStation); 1024] = [
     // 0x000
     op00x_lsl_ri5,
     op00x_lsl_ri5,

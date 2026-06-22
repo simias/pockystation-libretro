@@ -1,5 +1,5 @@
+use crate::Addressable;
 use crate::interrupt::{Interrupt, IrqController};
-use crate::memory::Addressable;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Timer {

@@ -3,7 +3,7 @@
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 
-use crate::memory::Addressable;
+use crate::Addressable;
 use crate::MASTER_CLOCK_HZ;
 
 pub struct Dac {

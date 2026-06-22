@@ -1,19 +1,15 @@
-//! ARMv4 instruction set
+//! ARMv4 instruction setddress
 
 use std::fmt;
 
-use crate::debugger::Debugger;
-use crate::memory::{Byte, HalfWord, Word};
+use crate::{Byte, HalfWord, PocketStation, Word};
 
 use super::{Cpu, RegisterIndex};
 
-pub fn execute<D>(cpu: &mut Cpu, debugger: &mut D, instruction: u32)
-where
-    D: Debugger,
-{
+pub fn execute(pks: &mut PocketStation, instruction: u32) {
     let instruction = Instruction(instruction);
 
-    instruction.execute(debugger, cpu);
+    instruction.execute(pks);
 }
 
 /// Wrapper around a 32bit instruction word
@@ -69,14 +65,11 @@ impl Instruction {
     }
 
     /// Execute this instruction
-    fn execute<D>(self, debugger: &mut D, cpu: &mut Cpu)
-    where
-        D: Debugger,
-    {
-        let n = cpu.n();
-        let z = cpu.z();
-        let c = cpu.c();
-        let v = cpu.v();
+    fn execute(self, pks: &mut PocketStation) {
+        let n = pks.cpu.n();
+        let z = pks.cpu.z();
+        let c = pks.cpu.c();
+        let v = pks.cpu.v();
 
         // All ARM instructions have a 4bit "condition" code which can
         // be used to conditionally execute an instruction without
@@ -118,17 +111,14 @@ impl Instruction {
         };
 
         if cond_true {
-            self.decode_and_execute(debugger, cpu);
+            self.decode_and_execute(pks);
         }
     }
 
-    fn decode_and_execute<D>(self, debugger: &mut D, cpu: &mut Cpu)
-    where
-        D: Debugger,
-    {
+    fn decode_and_execute(self, pks: &mut PocketStation) {
         let handler = OPCODE_LUT[self.opcode() as usize];
 
-        handler(self, debugger, cpu);
+        handler(self, pks);
     }
 }
 
@@ -488,39 +478,39 @@ impl Mode1Addressing for Mode1RorReg {
     }
 }
 
-fn unimplemented(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn unimplemented(instruction: Instruction, pks: &mut PocketStation) {
     panic!(
         "Unimplemented instruction {} ({:03x})\n{:?}",
         instruction,
         instruction.opcode(),
-        cpu
+        pks.cpu
     );
 }
 
-fn and<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn and<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 0, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a & b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn ands<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn ands<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 0, true));
 
@@ -528,41 +518,41 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a & b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn eor<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn eor<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 1, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a ^ b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn eors<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn eors<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 1, true));
 
@@ -570,41 +560,41 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a ^ b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn sub<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn sub<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let dst = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 2, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
-    cpu.set_reg(dst, val);
+    pks.cpu.set_reg(dst, val);
 }
 
-fn subs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn subs<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 2, true));
 
@@ -612,7 +602,7 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
@@ -620,38 +610,38 @@ where
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(a >= b);
-    cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(a >= b);
+    pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn rsb<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn rsb<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let a = M::value(instruction, cpu);
+    let a = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 3, false));
 
-    let b = cpu.reg(rn);
+    let b = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn rsbs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn rsbs<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let a = M::value(instruction, cpu);
+    let a = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 3, true));
 
@@ -659,7 +649,7 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let b = cpu.reg(rn);
+    let b = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
@@ -667,38 +657,38 @@ where
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(a >= b);
-    cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(a >= b);
+    pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn add<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn add<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 4, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_add(b);
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn adds<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn adds<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 4, true));
 
@@ -706,7 +696,7 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let (val, c) = a.overflowing_add(b);
 
@@ -714,39 +704,39 @@ where
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
-    cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
+    pks.cpu.set_v((a_neg == b_neg) & (a_neg ^ v_neg));
 }
 
-fn adc<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn adc<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let dst = instruction.rd();
     let rn = instruction.rn();
-    let c = cpu.c() as u32;
-    let b = M::value(instruction, cpu);
+    let c = pks.cpu.c() as u32;
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 5, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_add(b).wrapping_add(c);
 
-    cpu.set_reg(dst, val);
+    pks.cpu.set_reg(dst, val);
 }
 
-fn tst<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn tst<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rn = instruction.rn();
     let rd = instruction.rd();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 8, true));
 
@@ -755,22 +745,22 @@ where
         panic!("TST instruction with non-0 Rd");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a & b;
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn teq<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn teq<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rn = instruction.rn();
     let rd = instruction.rd();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 9, true));
 
@@ -779,22 +769,22 @@ where
         panic!("TEQ instruction with non-0 Rd");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a ^ b;
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn cmp<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn cmp<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rn = instruction.rn();
     let rd = instruction.rd();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 10, true));
 
@@ -803,7 +793,7 @@ where
         panic!("CMP instruction with non-0 Rd");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_sub(b);
 
@@ -811,19 +801,19 @@ where
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(a >= b);
-    cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(a >= b);
+    pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn cmn<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn cmn<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rn = instruction.rn();
     let rd = instruction.rd();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 11, true));
 
@@ -832,7 +822,7 @@ where
         panic!("CMP instruction with non-0 Rd");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a.wrapping_add(b);
 
@@ -840,36 +830,36 @@ where
     let b_neg = (b as i32) < 0;
     let v_neg = (val as i32) < 0;
 
-    cpu.set_n(v_neg);
-    cpu.set_z(val == 0);
-    cpu.set_c(a >= b);
-    cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
+    pks.cpu.set_n(v_neg);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(a >= b);
+    pks.cpu.set_v((a_neg ^ b_neg) & (a_neg ^ v_neg));
 }
 
-fn orr<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn orr<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 12, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a | b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn orrs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn orrs<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 12, true));
 
@@ -877,24 +867,24 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a | b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn mov<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn mov<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let val = M::value(instruction, cpu);
+    let val = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 13, false));
 
@@ -903,15 +893,15 @@ where
         panic!("CMP instruction with non-0 Rn");
     }
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn movs<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn movs<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
-    let (val, c) = M::value_carry(instruction, cpu);
+    let (val, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 13, true));
 
@@ -919,37 +909,37 @@ where
         panic!("*S instruction with PC target");
     }
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn bic<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn bic<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let b = M::value(instruction, cpu);
+    let b = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 14, false));
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a & !b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn bics<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn bics<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let rd = instruction.rd();
     let rn = instruction.rn();
-    let (b, c) = M::value_carry(instruction, cpu);
+    let (b, c) = M::value_carry(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 14, true));
 
@@ -957,24 +947,24 @@ where
         panic!("*S instruction with PC target");
     }
 
-    let a = cpu.reg(rn);
+    let a = pks.cpu.reg(rn);
 
     let val = a & !b;
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
-    cpu.set_n((val as i32) < 0);
-    cpu.set_z(val == 0);
-    cpu.set_c(c);
+    pks.cpu.set_n((val as i32) < 0);
+    pks.cpu.set_z(val == 0);
+    pks.cpu.set_c(c);
 }
 
-fn mvn<M>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn mvn<M>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode1Addressing,
 {
     let dst = instruction.rd();
     let rn = instruction.rn();
-    let val = M::value(instruction, cpu);
+    let val = M::value(instruction, &pks.cpu);
 
     debug_assert!(M::is_valid(instruction, 15, false));
 
@@ -983,10 +973,10 @@ where
         panic!("MVN instruction with non-0 Rn");
     }
 
-    cpu.set_reg(dst, !val);
+    pks.cpu.set_reg(dst, !val);
 }
 
-fn mul<S>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn mul<S>(instruction: Instruction, pks: &mut PocketStation)
 where
     S: ModeFlag,
 {
@@ -999,18 +989,18 @@ where
         panic!("Unpredictable MUL");
     }
 
-    let val = cpu.reg(rm).wrapping_mul(cpu.reg(rs));
+    let val = pks.cpu.reg(rm).wrapping_mul(pks.cpu.reg(rs));
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
     if S::is_set() {
-        cpu.set_n((val as i32) < 0);
-        cpu.set_z(val == 0);
+        pks.cpu.set_n((val as i32) < 0);
+        pks.cpu.set_z(val == 0);
         // XXX ARM says C flag is UNPREDICTABLE
     }
 }
 
-fn mla<S>(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu)
+fn mla<S>(instruction: Instruction, pks: &mut PocketStation)
 where
     S: ModeFlag,
 {
@@ -1024,16 +1014,17 @@ where
         panic!("Unpredictable MLA");
     }
 
-    let val = cpu
+    let val = pks
+        .cpu
         .reg(rm)
-        .wrapping_mul(cpu.reg(rs))
-        .wrapping_add(cpu.reg(rn));
+        .wrapping_mul(pks.cpu.reg(rs))
+        .wrapping_add(pks.cpu.reg(rn));
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 
     if S::is_set() {
-        cpu.set_n((val as i32) < 0);
-        cpu.set_z(val == 0);
+        pks.cpu.set_n((val as i32) < 0);
+        pks.cpu.set_z(val == 0);
         // XXX ARM says C flag is UNPREDICTABLE
     }
 }
@@ -1285,13 +1276,13 @@ impl Mode2Addressing for Mode2LslRegPre {
     }
 }
 
-fn ldr<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldr<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode2Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false));
 
@@ -1300,18 +1291,18 @@ where
     let rot = (addr & 3) * 8;
     let addr = addr & !3;
 
-    let val = cpu.load::<Word>(debugger, addr).rotate_right(rot);
+    let val = pks.load::<Word>(addr).rotate_right(rot);
 
-    cpu.set_reg_pc_mask(rd, val);
+    pks.cpu.set_reg_pc_mask(rd, val);
 }
 
-fn str<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn str<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode2Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, false));
 
@@ -1320,33 +1311,33 @@ where
         panic!("PC stored in STR");
     }
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Word>(debugger, addr, val);
+    pks.store::<Word>(addr, val);
 }
 
-fn ldrb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldrb<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode2Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, true));
 
-    let val = cpu.load::<Byte>(debugger, addr);
+    let val = pks.load::<Byte>(addr);
 
-    cpu.set_reg_pc_mask(rd, val);
+    pks.cpu.set_reg_pc_mask(rd, val);
 }
 
-fn strb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn strb<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode2Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, true));
 
@@ -1356,9 +1347,9 @@ where
         panic!("PC stored in STRB");
     }
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<Byte>(debugger, addr, val);
+    pks.store::<Byte>(addr, val);
 }
 
 /// Addressing mode 3: Miscellaneous Loads and Stores
@@ -1549,64 +1540,64 @@ impl Mode3Addressing for Mode3Reg {
     }
 }
 
-fn ldrh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldrh<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode3Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false, false));
 
-    let val = cpu.load::<HalfWord>(debugger, addr);
+    let val = pks.load::<HalfWord>(addr);
 
-    cpu.set_reg(rd, val)
+    pks.cpu.set_reg(rd, val)
 }
 
-fn ldrsh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldrsh<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode3Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, false, true));
 
-    let val = cpu.load::<HalfWord>(debugger, addr) as i16;
+    let val = pks.load::<HalfWord>(addr) as i16;
 
-    cpu.set_reg(rd, val as u32)
+    pks.cpu.set_reg(rd, val as u32)
 }
 
-fn strh<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn strh<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode3Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, false, false, false));
 
-    let val = cpu.reg(rd);
+    let val = pks.cpu.reg(rd);
 
-    cpu.store::<HalfWord>(debugger, addr, val);
+    pks.store::<HalfWord>(addr, val);
 }
 
-fn ldrsb<M, U>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldrsb<M, U>(instruction: Instruction, pks: &mut PocketStation)
 where
     M: Mode3Addressing,
     U: ModeFlag,
 {
     let rd = instruction.rd();
-    let addr = M::address::<U>(instruction, cpu);
+    let addr = M::address::<U>(instruction, &mut pks.cpu);
 
     debug_assert!(M::is_valid::<U>(instruction, true, true, true));
 
-    let val = cpu.load::<Byte>(debugger, addr) as i8;
+    let val = pks.load::<Byte>(addr) as i8;
 
-    cpu.set_reg(rd, val as u32)
+    pks.cpu.set_reg(rd, val as u32)
 }
 
 /// LDM/STM start address and WriteBack value
@@ -1634,7 +1625,7 @@ where
     }
 }
 
-fn ldm<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldm<U, P, W>(instruction: Instruction, pks: &mut PocketStation)
 where
     U: ModeFlag,
     P: ModeFlag,
@@ -1660,7 +1651,7 @@ where
         panic!("Unpredictable LDM");
     }
 
-    let base = cpu.reg(rn);
+    let base = pks.cpu.reg(rn);
 
     let (mut addr, wb) = mode4_start_wb::<U, P>(base, list);
 
@@ -1668,16 +1659,16 @@ where
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.load::<Word>(debugger, addr);
+            let val = pks.load::<Word>(addr);
 
-            cpu.set_reg_pc_mask(reg, val);
+            pks.cpu.set_reg_pc_mask(reg, val);
 
             addr = addr.wrapping_add(4);
         }
     }
 
     if W::is_set() {
-        cpu.set_reg(rn, wb);
+        pks.cpu.set_reg(rn, wb);
     }
 }
 
@@ -1689,7 +1680,7 @@ where
 //
 // If PC is missing then it's LDM(2) and it loads *user mode*
 // registers.
-fn ldms<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn ldms<U, P, W>(instruction: Instruction, pks: &mut PocketStation)
 where
     U: ModeFlag,
     P: ModeFlag,
@@ -1723,7 +1714,7 @@ where
         debug_assert!(W::is_clear());
     }
 
-    let base = cpu.reg(rn);
+    let base = pks.cpu.reg(rn);
 
     let (mut addr, wb) = mode4_start_wb::<U, P>(base, list);
 
@@ -1733,7 +1724,7 @@ where
         if ((list >> i) & 1) != 0 {
             let reg = RegisterIndex(i);
 
-            let val = cpu.load::<Word>(debugger, addr);
+            let val = pks.load::<Word>(addr);
 
             if load_spsr {
                 if i == 15 {
@@ -1741,9 +1732,9 @@ where
                     // restore the SPSR *but* we want to wait until
                     // the writeback is handled, otherwise we might
                     // update a register in the wrong mode.
-                    pc = cpu.load::<Word>(debugger, addr);
+                    pc = pks.load::<Word>(addr);
                 } else {
-                    cpu.set_reg(reg, val);
+                    pks.cpu.set_reg(reg, val);
                 }
             } else {
                 // XXX Implement user-mode loading
@@ -1755,17 +1746,17 @@ where
     }
 
     if W::is_set() {
-        cpu.set_reg(rn, wb);
+        pks.cpu.set_reg(rn, wb);
     }
 
     if load_spsr {
-        let spsr = cpu.spsr();
+        let spsr = pks.cpu.spsr();
 
-        cpu.set_pc_cpsr(pc, spsr);
+        pks.cpu.set_pc_cpsr(pc, spsr);
     }
 }
 
-fn stm<U, P, W>(instruction: Instruction, debugger: &mut dyn Debugger, cpu: &mut Cpu)
+fn stm<U, P, W>(instruction: Instruction, pks: &mut PocketStation)
 where
     U: ModeFlag,
     P: ModeFlag,
@@ -1797,7 +1788,7 @@ where
         panic!("Implementation-defined STM");
     }
 
-    let base = cpu.reg(rn);
+    let base = pks.cpu.reg(rn);
 
     let (mut addr, wb) = mode4_start_wb::<U, P>(base, list);
 
@@ -1811,8 +1802,8 @@ where
                 panic!("Unpredictable STM");
             }
 
-            let val = cpu.reg(reg);
-            cpu.store::<Word>(debugger, addr, val);
+            let val = pks.cpu.reg(reg);
+            pks.store::<Word>(addr, val);
 
             addr = addr.wrapping_add(4);
 
@@ -1821,23 +1812,23 @@ where
     }
 
     if W::is_set() {
-        cpu.set_reg(rn, wb);
+        pks.cpu.set_reg(rn, wb);
     }
 }
 
-fn mrs_cpsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn mrs_cpsr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.rd();
 
     if (instruction.0 & 0xf0fff) != 0xf0000 {
         panic!("Invalid MRS instruction {}", instruction);
     }
 
-    let cpsr = cpu.cpsr();
+    let cpsr = pks.cpu.cpsr();
 
-    cpu.set_reg(rd, cpsr);
+    pks.cpu.set_reg(rd, cpsr);
 }
 
-fn msr_cpsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn msr_cpsr(instruction: Instruction, pks: &mut PocketStation) {
     let rm = instruction.rm();
     let mask = instruction.msr_field_mask();
 
@@ -1845,12 +1836,12 @@ fn msr_cpsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
         panic!("Invalid MSR instruction {}", instruction);
     }
 
-    let val = cpu.reg(rm);
+    let val = pks.cpu.reg(rm);
 
-    cpu.msr_cpsr(val, mask);
+    pks.cpu.msr_cpsr(val, mask);
 }
 
-fn bx(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn bx(instruction: Instruction, pks: &mut PocketStation) {
     let rm = instruction.rm();
 
     if (instruction.0 & 0xfff00) != 0xfff00 {
@@ -1858,52 +1849,52 @@ fn bx(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
         panic!("Invalid BX instruction {}", instruction);
     }
 
-    let target = cpu.reg(rm);
+    let target = pks.cpu.reg(rm);
 
     // If bit 0 of the target is set we switch to Thumb mode
     let thumb = (target & 1) != 0;
     let address = target & !1;
 
-    cpu.set_pc_thumb(address, thumb);
+    pks.cpu.set_pc_thumb(address, thumb);
 }
 
-fn mrs_spsr(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn mrs_spsr(instruction: Instruction, pks: &mut PocketStation) {
     let rd = instruction.rd();
 
     if rd.is_pc() || (instruction.0 & 0xf0fff) != 0xf0000 {
         panic!("Invalid MSR instruction {}", instruction);
     }
 
-    let val = cpu.spsr();
+    let val = pks.cpu.spsr();
 
-    cpu.set_reg(rd, val);
+    pks.cpu.set_reg(rd, val);
 }
 
-fn b(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn b(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.branch_imm_offset();
 
-    let pc = cpu.reg(RegisterIndex(15)).wrapping_add(offset);
+    let pc = pks.cpu.reg(RegisterIndex(15)).wrapping_add(offset);
 
-    cpu.set_pc(pc);
+    pks.cpu.set_pc(pc);
 }
 
-fn bl(instruction: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
+fn bl(instruction: Instruction, pks: &mut PocketStation) {
     let offset = instruction.branch_imm_offset();
 
-    let pc = cpu.registers[15].wrapping_add(offset);
+    let pc = pks.cpu.registers[15].wrapping_add(offset);
 
-    let ra = cpu.next_pc;
+    let ra = pks.cpu.next_pc;
 
-    cpu.set_reg(RegisterIndex(14), ra);
+    pks.cpu.set_reg(RegisterIndex(14), ra);
 
-    cpu.set_pc(pc);
+    pks.cpu.set_pc(pc);
 }
 
-fn swi(_: Instruction, _: &mut dyn Debugger, cpu: &mut Cpu) {
-    cpu.swi();
+fn swi(_: Instruction, pks: &mut PocketStation) {
+    pks.cpu.swi();
 }
 
-static OPCODE_LUT: [fn(Instruction, &mut dyn Debugger, &mut Cpu); 4096] = [
+static OPCODE_LUT: [fn(Instruction, &mut PocketStation); 4096] = [
     // 0x000
     and::<Mode1LslImm>,
     and::<Mode1LslReg>,
