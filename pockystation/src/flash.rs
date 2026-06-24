@@ -10,15 +10,13 @@ pub struct Flash {
     bios_at_0: bool,
     /// Physical bank enable bits.
     phys_bank_en: u16,
-    /// Physical-to-virtual bank mapping. None if the virtual bank is
-    /// not mapped.
+    /// Physical-to-virtual bank mapping.
     phys_to_virt_bank: [u8; 16],
     /// Virtual-to-physical bank mapping. None if the virtual bank is
     /// not mapped.
     virt_to_phys_bank: [Option<u8>; 16],
     f_wait1: u8,
     f_wait2: u8,
-    f_ctrl: u8,
 }
 
 impl Flash {
@@ -35,7 +33,6 @@ impl Flash {
             virt_to_phys_bank: [None; 16],
             f_wait1: 0,
             f_wait2: 0,
-            f_ctrl: 0,
         })
     }
 
@@ -45,34 +42,50 @@ impl Flash {
 
     pub fn load_config<A: Addressable>(&self, offset: u32) -> u32 {
         match offset {
-            // The BIOS expects bit 0 to be set, otherwise it gets
-            // stuck in a strang loop waiting for R0 to become 1 (but
-            // it doesn't actually load anything in R0 in the loop, so
-            // I don't understand how it's ever supposed to exit
-            // it). This loop is at offset 0x2e16 and 0x2e18 in the
-            // BIOS.
+            // The BIOS expects bit 0 to be set, otherwise it gets stuck in a strange loop waiting
+            // for R0 to become 1 (but it doesn't actually load anything in R0 in the loop, so I
+            // don't understand how it's ever supposed to exit it). This loop is at offset 0x2e16
+            // and 0x2e18 in the BIOS.
             //
-            // XXX Run tests on real hardware to figure out what's
-            // read from here exactly.
-            0x00 => (self.f_ctrl | 1) as u32,
+            // In my tests on the real hardware this register seems to read 1 all the time,
+            // regardless of what I write at the address (tested with 0, 1, 2, 3, and 0xff).
+            //
+            // I presume that this reads "1" when the RAM has been remapped at 0 and there's no way
+            // to undo this without resetting the device.
+            0x00 => 1,
             // XXX figure out what this register does exactly, No$
             // calls it "F_STAT".
             0x04 => 0,
-            0x0c => self.f_wait1 as u32,
-            0x10 => (self.f_wait2 | 4) as u32,
+            // Seems to always read 4
+            0x0c => 4 as u32,
+            // Seems to always read 4
+            0x10 => 4 as u32,
             0x08 => self.phys_bank_en as u32,
             0x100..=0x13c => {
                 let phys_bank = (offset & 0x3f) >> 2;
 
                 self.phys_to_virt_bank[phys_bank as usize] as u32
             }
-            // F_SN_LO, XXX dump it from real pocketstation
-            0x300 => 0,
-            // F_SN_HI, XXX dump it from real pocketstation
-            0x302 => 0,
-            // F_CAL. XXX Need to dump a value from a real
-            // PocketStation.
-            0x308 => 0xca1,
+            // F_SN
+            //
+            // This is apparently unique for every PocketStation, this is the value I dumped on my
+            // own.
+            //
+            // No$ says that MGS uses this value as "copy protection", refusing to run if the value
+            // differs from the original save.
+            //
+            // No$ also says that "the two LO/HI registers must be read by separate 16bit LDRH
+            // opcodes (not by a single 32bit LDR opcode)", not sure what's that about, the values
+            // below were read using the COM "read memory" commands. Maybe it uses 8bit reads under
+            // the hood so it works on a 16-bit restricted bus? Needs to check.
+            //
+            // The BIOS dos read both these registers with LDRH, so maybe those high 16 bits are
+            // garbage?
+            0x300 => 0x472e_e203,
+            // F_CAL.
+            0x308 => 0x1d,
+            0x310 => 0x10,
+            0x37c => 0x5400_000,
             _ => panic!("Unhandled flash config register {:x}", offset),
         }
     }
@@ -85,6 +98,8 @@ impl Flash {
                 self.rebuild_virt_mapping();
             }
             0x0c => self.f_wait1 = val as u8,
+            // It seems that writing 0x41 in this register might remap the flash containing the
+            // serial and calibration values, allowing writes to it.
             0x10 => self.f_wait2 = val as u8,
             0x100..=0x13c => {
                 let phys_bank = (offset & 0x3f) >> 2;
@@ -152,10 +167,11 @@ impl Flash {
     }
 
     fn set_f_ctrl(&mut self, val: u32) {
-        self.f_ctrl = val as u8;
-
+        // It doesn't appear to be possible to undo this change without resetting to test
         if val == 0x03 {
             self.bios_at_0 = false;
+        } else {
+            info!("F_CTRL {val:x}")
         }
     }
 

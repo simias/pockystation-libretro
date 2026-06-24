@@ -30,6 +30,12 @@ impl Lcd {
         }
 
         match offset {
+            // Writing 0 seems to hang the console? Maybe it's because you can't write to the LCD
+            // mem if it's not running, the BIOS init code clears the screen *after* it's been
+            // configured.
+            //
+            // Clearing bit 3 seems to fade the screen off, maybe something refresh-related.
+            // Clearing bits 4-5 also switches the screen off with some visual glitches
             0 => self.mode = val as u8,
             4 => self.calibration = val as u8,
             0x100..=0x17c => {

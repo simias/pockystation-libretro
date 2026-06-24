@@ -58,7 +58,9 @@ pub struct PocketStation {
     irda: Irda,
     cpu_clk_div: u8,
     frame_ticks: u32,
-    iop_ctrl: u8,
+    gpio_out: u8,
+    gpo_val: u8,
+    batt_ctrl: u8,
     #[serde(skip, default)]
     debugger: Option<Box<dyn Debugger>>,
 }
@@ -83,7 +85,9 @@ impl PocketStation {
             irda: Irda::new(),
             cpu_clk_div: 7,
             frame_ticks: 0,
-            iop_ctrl: 0,
+            gpio_out: 0,
+            gpo_val: 0,
+            batt_ctrl: 0,
             debugger: None,
         }
     }
@@ -165,9 +169,11 @@ impl PocketStation {
             0x0b => match offset {
                 // CLK MODE
                 0 => {
-                    let div = 7 - self.cpu_clk_div;
+                    let div = 8 - (self.cpu_clk_div + 1);
 
                     // Reply that the clock is ready (locked?)
+                    //
+                    // XXX how long does it take for this bit to go up on the real hardware?
                     0x10 | div as u32
                 }
                 0x800000..=0x80000c => self.rtc.load::<A>(offset & 0xf),
@@ -180,15 +186,17 @@ impl PocketStation {
             },
             0x0d => match offset {
                 0..=0x1ff => self.lcd.load::<A>(offset),
-                0x800000 => self.iop_ctrl as u32,
-                // XXX Figure out what this register is exactly
+                0x800000 => u32::from(self.gpio_out),
                 0x800004 => 0,
+                0x800008 => 0,
                 // XXX Figure out what this register is exactly
-                0x80000c => 0,
+                //
+                // This might be the input value for the GPO. If I set the direction of the LED to 0
+                // in 0x0D800000 then read this I get 0x12 in this register.
+                0x80000c => u32::from(0x10 | ((!self.gpio_out) & 2)),
                 0x800010 => self.dac.load::<A>(0),
                 0x800014 => self.dac.load::<A>(4),
-                // XXX BATT CTRL
-                0x800020 => 0,
+                0x800020 => u32::from(self.batt_ctrl),
                 _ => unimplemented(),
             },
             _ => unimplemented(),
@@ -240,7 +248,14 @@ impl PocketStation {
                 // values greater than 8 are possible but treated
                 // like 8. I need to run some tests on the real
                 // hardware to make sure.
-                0 => self.cpu_clk_div = 7 - (val & 0x7) as u8,
+                0 => {
+                    let v = val.min(8);
+                    if v == 0 {
+                        // Freezes hardware
+                        panic!("CLK DIV 0!");
+                    }
+                    self.cpu_clk_div = (8 - v - 1) as u8;
+                }
                 0x800000..=0x80000c => self.rtc.store::<A>(offset & 0xf, val),
                 _ => unimplemented(),
             },
@@ -256,18 +271,52 @@ impl PocketStation {
             0x0d => match offset {
                 0..=0x1ff => self.lcd.store::<A>(offset, val),
                 0x800000 => {
-                    debug!("IOP CTRL 0x{:08x}", val);
-                    self.iop_ctrl = val as u8;
+                    // No$ says it's a direction, but it's set to 0xf by the bios which would imply
+                    // that 0-3 are output and the rest input, but that doesn't appear to be true.
+                    //
+                    // However clearing bit 1 does turn the LED off (and setting it light it back
+                    // up, so the led is set if we have (CTRL & SET & 2)
+                    debug!("GPIO DIR 0x{:08x}", val);
+                    self.gpio_out = val as u8;
                 }
-                0x800004 => debug!("IOP STOP 0x{:08x}", val),
-                0x800008 => debug!("IOP START 0x{:08x}", val),
+                0x800004 => self.gpo_val &= !(val as u8),
+                0x800008 => {
+                    if (val & !2) != 0 {
+                        debug!("SETTING GPO {val:x}");
+                    }
+                    self.gpo_val |= val as u8;
+                }
                 0x800010 => self.dac.store::<A>(0, val),
                 0x800014 => self.dac.store::<A>(4, val),
-                0x800020 => debug!("BATT CTRL 0x{:08x}", val),
+                0x800020 => {
+                    if val != 0 {
+                        debug!("BATT CTRL 0x{:08x}", val);
+                    }
+
+                    // Set to 0 by the BIOS
+                    //
+                    // Writing 0xff doesn't seem to do anything, reads back 7
+                    // writing 0x1 reads back 1
+                    // Writing 0x2 displays the "low battery" indicator on the screen, and the
+                    //             console won't respond to COM. Buttons remain active.
+                    // Writing 0x3 seems to crash/freeze the console (no reset, screen shuts down)
+                    // Writing 0x4 reads back 4
+                    // Writing 0x5 reads back 5 and the screen blinks, looks dimmed and displays the
+                    //             low battery indicator
+                    // Writing 0x6 reads back 6
+                    //
+                    // So apparently setting
+                    self.batt_ctrl = (val as u8) & 7
+                }
                 _ => unimplemented(),
             },
             _ => unimplemented(),
         }
+    }
+
+    // Returns true if the red LED above the screen is lit
+    pub fn led_state(&self) -> bool {
+        self.gpio_out & self.gpo_val & 2 != 0
     }
 
     /// Load a memory location without side-effect, useful for

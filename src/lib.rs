@@ -345,11 +345,9 @@ impl Context {
         let century = Bcd::from_binary(century).unwrap();
         let year = (year % 100) as u8;
 
-        // The century is not stored in the RTC, it's stored in RAM at
-        // address 0xcf. Hopefully this address is always correct...
+        // The century is not stored in the RTC, it's stored in RAM at address 0xcf by the BIOS
         //
-        // XXX This doesn't work as expected, there must be more to it. Needs to disassemble the
-        // code to figure out how the BIOS handles it.
+        // XXX Except that this isn't enough, the GUI still won't accept it.
         self.pks.store::<Byte>(0xcf, century.bcd() as u32);
 
         {
@@ -376,6 +374,10 @@ impl Context {
 
             rtc.set_year(Bcd::from_binary(year).unwrap());
         }
+
+        // Store 1 @ 0x240 to make the GUI believe that the time was configured through it
+        // (otherwise it blinks waiting for the user to validate)
+        self.pks.store::<Byte>(0x240, 1);
     }
 }
 
@@ -383,7 +385,9 @@ impl libretro::Context for Context {
     fn render_frame(&mut self) {
         self.poll_controllers();
 
-        let debug_request = self.debug_on_key && libretro::key_pressed(0, libretro::Key::Pause);
+        let debug_request = self.debug_on_key
+            && (libretro::key_pressed(0, libretro::Key::Pause)
+                || libretro::button_pressed(0, libretro::JoyPadButton::Select));
 
         if debug_request {
             self.pks.trigger_break();
@@ -492,7 +496,7 @@ struct CoreVariables (prefix = "pockystation") {
     debug_on_bkpt: bool, parse_bool
         => "Trigger debugger on BKPT instructions; disabled|enabled",
     debug_on_key: bool, parse_bool
-        => "Trigger debugger when Pause/Break is pressed; disabled|enabled",
+        => "Trigger debugger when Pause/Break or gamepad Select is pressed; disabled|enabled",
     debug_on_reset: bool, parse_bool
         => "Trigger debugger on start or reset; disabled|enabled",
 });

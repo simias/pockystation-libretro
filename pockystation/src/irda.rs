@@ -22,7 +22,12 @@ impl Irda {
         }
 
         match offset {
-            0 => self.mode = val as u8,
+            0 => {
+                self.mode = (val as u8) & 0xf;
+                if self.mode & 2 != 0 {
+                    warn!("IRDA enable!");
+                }
+            }
             4 => self.led_on = (val & 1) != 0,
             _ => panic!("Unhandled IrDA register {:x}", offset),
         }

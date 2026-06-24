@@ -166,9 +166,11 @@ impl Rtc {
         let day = self.day.bcd() as u32;
         let month = self.month.bcd() as u32;
         let year = self.year.bcd() as u32;
+        let week_day = self.week_day.bcd() as u32;
 
-        // XXX What is the high byte exactly?
-        day | (month << 8) | (year << 16)
+        // In my tests the high byte is the week day as well.
+        // Or maybe it's the last value being written?
+        day | (month << 8) | (year << 16) | (week_day << 24)
     }
 
     fn set_mode(&mut self, val: u32) {
