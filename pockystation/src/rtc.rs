@@ -250,6 +250,10 @@ impl Rtc {
             // XXX The RTC doesn't store the century, so it's
             // probably not able to handle leap years at all? Does
             // the BIOS handle it?
+            //
+            // -> The BIOS partially handles it, it sets the days to 29 if year % 4 == 0
+            //
+            // Needs to check to see if the actual RTC does the same thing.
             0x02 => 0x28,
             0x03 => 0x31,
             0x04 => 0x30,

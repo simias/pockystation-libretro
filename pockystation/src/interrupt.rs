@@ -54,7 +54,7 @@ impl IrqController {
             // Interrupt mask clear
             0x0c => self.mask &= !val,
             // Interrupt acknowledge
-            0x10 => self.latch &= !val,
+            0x10 => self.ack(val),
             _ => panic!("Unhandled IRQ register {:x}", offset),
         }
     }
