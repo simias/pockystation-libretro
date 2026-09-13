@@ -91,6 +91,11 @@ impl Context {
             context.pks.trigger_break();
         }
 
+
+        if CoreVariables::fast_boot() {
+            context.pks.bios.patch_fast_boot();
+        }
+
         Ok(context)
     }
 
@@ -491,6 +496,8 @@ libretro_variables!(
 struct CoreVariables (prefix = "pockystation") {
     rtc_host_sync: bool, parse_bool
         => "Synchronize real-time clock with host; disabled|enabled",
+    fast_boot: bool, parse_bool
+        => "Skip boot animation/RTC setting; disabled|enabled",
     lcd_rotation_en: bool, parse_bool
         => "Display rotation; enabled|disabled",
     debug_on_bkpt: bool, parse_bool

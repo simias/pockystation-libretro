@@ -54,6 +54,12 @@ impl Bios {
 
         r
     }
+
+    pub fn patch_fast_boot(&mut self) {
+        // Patch the kernel to pass 0x10 instead of 0x00 to user_start, which tells the user code to
+        // skip the animation/RTC reset sequence
+        self.data[0x89] = 0x10;
+    }
 }
 
 impl Serialize for Bios {
