@@ -4,7 +4,7 @@ use std::fmt;
 
 use crate::{Byte, HalfWord, PocketStation, Word};
 
-use super::{Cpu, RegisterIndex};
+use super::{Cpu, RegisterIndex, Mode};
 
 pub fn execute(pks: &mut PocketStation, instruction: u32) {
     let instruction = Instruction(instruction);
@@ -1808,6 +1808,62 @@ where
             addr = addr.wrapping_add(4);
 
             first = false;
+        }
+    }
+
+    if W::is_set() {
+        pks.cpu.set_reg(rn, wb);
+    }
+}
+
+/// STM (User registers)
+fn stmu<U, P, W>(instruction: Instruction, pks: &mut PocketStation)
+where
+    U: ModeFlag,
+    P: ModeFlag,
+    W: ModeFlag,
+{
+    let rn = instruction.rn();
+    let list = instruction.register_list();
+
+    let base_in_list = (list & (1 << rn.0)) != 0;
+
+    debug_assert!({
+        let i = instruction.0;
+
+        ((i >> 25) & 7) == 0b100
+            && ((i >> 24) & 1) == P::is_set() as u32
+            && ((i >> 23) & 1) == U::is_set() as u32
+            && ((i >> 22) & 1) == 1
+            && ((i >> 21) & 1) == W::is_set() as u32
+            && ((i >> 20) & 1) == 0_u32
+    });
+
+    if list == 0 || rn.is_pc() || (W::is_set() && base_in_list) || matches!(pks.cpu.mode, Mode::User | Mode::System) {
+        panic!("Unpredictable STM^");
+    }
+
+    if W::is_set() {
+        // XXX This is "UNPREDICTABLE" per the spec, but the PocketStation firmware uses it:
+        //
+        // 4001944:	e8e06000 	stmia	r0!, {sp, lr}^
+        //
+        // I need to write a test to see if it behaves oddly.
+        warn!("Unpredictable STM^ with writeback!");
+    }
+
+    let base = pks.cpu.reg(rn);
+
+    let (mut addr, wb) = mode4_start_wb::<U, P>(base, list);
+
+    for i in 0..16 {
+        if ((list >> i) & 1) != 0 {
+            let reg = RegisterIndex(i);
+
+            let val = pks.cpu.mode_reg(Mode::User, reg);
+            pks.store::<Word>(addr, val);
+
+            addr = addr.wrapping_add(4);
         }
     }
 
@@ -4318,22 +4374,22 @@ static OPCODE_LUT: [fn(Instruction, &mut PocketStation); 4096] = [
     unimplemented,
     unimplemented,
     // 0x8e0
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
-    unimplemented,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
+    stmu::<Set, Clear, Set>,
     // 0x8f0
     ldms::<Set, Clear, Set>,
     ldms::<Set, Clear, Set>,

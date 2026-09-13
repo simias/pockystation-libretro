@@ -139,6 +139,35 @@ impl Cpu {
         self.registers[r.0 as usize]
     }
 
+    /// Return the current value of a register for the given mode
+    fn mode_reg(&self, mode: Mode, r: RegisterIndex) -> u32 {
+        if self.mode == mode {
+            self.reg(r)
+        } else {
+            match (mode, r.0) {
+                (Mode::User | Mode::System, 13) => self.user_system_bank[1],
+                (Mode::User | Mode::System, 14) => self.user_system_bank[0],
+                (Mode::Supervisor, 13) => self.supervisor_bank[2],
+                (Mode::Supervisor, 14) => self.supervisor_bank[1],
+                (Mode::Abort, 13) => self.abort_bank[2],
+                (Mode::Abort, 14) => self.abort_bank[1],
+                (Mode::Undefined, 13) => self.undefined_bank[2],
+                (Mode::Undefined, 14) => self.undefined_bank[1],
+                (Mode::Irq, 13) => self.undefined_bank[2],
+                (Mode::Irq, 14) => self.undefined_bank[1],
+                (Mode::Fiq, 8) => self.fiq_bank[7],
+                (Mode::Fiq, 9) => self.fiq_bank[6],
+                (Mode::Fiq, 10) => self.fiq_bank[5],
+                (Mode::Fiq, 11) => self.fiq_bank[4],
+                (Mode::Fiq, 12) => self.fiq_bank[3],
+                (Mode::Fiq, 13) => self.fiq_bank[2],
+                (Mode::Fiq, 14) => self.fiq_bank[1],
+                // The other registers aren't banked
+                _ => self.reg(r)
+            }
+        }
+    }
+
     fn set_reg(&mut self, r: RegisterIndex, v: u32) {
         if r.is_pc() {
             self.set_pc(v);
