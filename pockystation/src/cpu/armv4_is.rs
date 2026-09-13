@@ -1890,6 +1890,14 @@ fn bl(instruction: Instruction, pks: &mut PocketStation) {
     pks.cpu.set_pc(pc);
 }
 
+fn bkpt(_: Instruction, pks: &mut PocketStation) {
+    if pks.cpu.debug_on_bkpt {
+        pks.trigger_break();
+    } else {
+        todo!("Handle breakpoint!")
+    }
+}
+
 fn swi(_: Instruction, pks: &mut PocketStation) {
     pks.cpu.swi();
 }
@@ -2209,7 +2217,7 @@ static OPCODE_LUT: [fn(Instruction, &mut PocketStation); 4096] = [
     unimplemented,
     unimplemented,
     unimplemented,
-    unimplemented,
+    bkpt,
     unimplemented,
     unimplemented,
     unimplemented,
