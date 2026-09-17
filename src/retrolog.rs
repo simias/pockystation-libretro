@@ -1,7 +1,6 @@
 //! Logger implementation using libretro as a backend
 
-use crate::libretro;
-use log::set_boxed_logger;
+use super::libretro;
 
 use std::io::{stderr, Write};
 
@@ -59,7 +58,10 @@ pub fn init() {
         Box::new(StdErrLogger)
     };
 
-    set_boxed_logger(logger).unwrap();
+    log::set_boxed_logger(logger).unwrap();
+    // Retroarch does its own filtering in the frontend, so it's probably not worth adding a level
+    // of configuration here.
+    log::set_max_level(log::LevelFilter::Debug);
 
     if retrolog_ok {
         info!("Logging initialized");
